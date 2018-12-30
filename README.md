@@ -87,6 +87,7 @@ Tested and working on Windows 10, Ubuntu 18.04 and the latest Kali build.
 ## Usage
 
     ./SlackPirate.py --cookie <cookie>
+    
 This will do the following:
 * Find any associated Workspaces that can be accessed using that cookie
 * Connect to any Workspaces that were returned
@@ -95,6 +96,7 @@ This will do the following:
 
 
     ./SlackPirate.py --token <token>
+    
 This will do the following:
 * Check Token validity and only continue if Slack returns `True`
 * Print to standard output if the tool found any @domains that can be used to register for the Slack Workspace (you may be surprised by what you find here - if you're lucky you'll find an old, unused, registerable domain here)
