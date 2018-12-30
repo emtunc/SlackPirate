@@ -58,10 +58,10 @@ def is_cookie_flag_set():
     if args.cookie:
         try:
             r = requests.get("https://a.slack.com", cookies=d_cookie)
-            regex_results = re.findall(already_signed_in_team_regex, str(r.content))
-            if regex_results:
+            already_signed_in_match = re.findall(already_signed_in_team_regex, str(r.content))
+            if already_signed_in_match:
                 print(termcolor.colored("This cookie has access to the following Workspaces: \n", "blue"))
-                for workspace in regex_results:
+                for workspace in already_signed_in_match:
                     r = requests.get(workspace, cookies=d_cookie)
                     regex_tokens = re.findall(slack_api_token_regex, str(r.content))
                     for slack_token in regex_tokens:
@@ -71,7 +71,7 @@ def is_cookie_flag_set():
                 print(termcolor.colored("No workspaces were found for this cookie", "red"))
                 exit()
         except requests.exceptions.RequestException as exception:
-            print(exception)
+            print(termcolor.colored(exception, "red"))
         exit()
 
 
@@ -92,7 +92,7 @@ def check_token_validity():
             print(termcolor.colored("Token not valid - maybe it's expired? Slack error: " + str(r['error']), "red"))
             exit()
     except requests.exceptions.RequestException as exception:
-        print(exception)
+        print(termcolor.colored(exception, "red"))
 
 
 def print_interesting_information():
@@ -102,7 +102,7 @@ def print_interesting_information():
         for domain in team_domains_match:
             print(termcolor.colored("The following domains can be used on this Slack Workspace: " + domain, "green"))
     except requests.exceptions.RequestException as exception:
-        print(exception)
+        print(termcolor.colored(exception, "red"))
 
 
 def dump_team_access_logs():
@@ -117,7 +117,7 @@ def dump_team_access_logs():
             print(termcolor.colored("Unable to dump access logs. Slack error: " + str(r['error']), "yellow"))
             return
     except requests.exceptions.RequestException as exception:
-        print(exception)
+        print(termcolor.colored(exception, "red"))
     print(termcolor.colored("Successfully dumped access logs! Filename: ./" + output_directory + "/" + file_access_logs,
                             "blue"))
 
@@ -137,7 +137,7 @@ def dump_user_list():
                 for value in r['members']:
                     pagination_cursor = r['response_metadata']['next_cursor']
                     with open(output_directory + '/' + file_user_list, 'a') as outfile:
-                        json.dump(value, outfile, indent=4, sort_keys=True, ensure_ascii=False)
+                        json.dump(value, outfile, indent=4, sort_keys=True, ensure_ascii=True)
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "red"))
     print(termcolor.colored("Successfully dumped user list! Filename: ./" + output_directory + "/" + file_user_list,
