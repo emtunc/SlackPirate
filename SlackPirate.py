@@ -17,6 +17,7 @@ parser.add_argument('--token', type=str, required=True, help='Slack Token - will
 args = parser.parse_args()
 token = args.token
 
+slack_workspace = ''
 output_directory = ''
 file_user_list = "user-list.json"
 file_access_logs = "access-logs.json"
@@ -32,6 +33,8 @@ private_keys_queries = ["BEGIN RSA PRIVATE", "BEGIN OPENSSH PRIVATE", "BEGIN DSA
                         "BEGIN PGP PRIVATE"]
 interesting_files_queries = [".KEY", ".PEM", ".PPK", ".XLS", ".XLSX", ".DOC", ".DOCX", ".SH", ".SQL", "password", "secret"]
 
+
+workspace_valid_emails_regex = r"email-domains-formatted=\"(@.+?)[\"]"
 private_keys_regex = r"[-]+BEGIN [^\s]+ PRIVATE KEY[-]+[\s]*[^-]*[-]+END [^\s]+ PRIVATE KEY[-]+"  # https://regex101.com/r/jWrF8F/1
 s3_regex = r"[a-zA-Z0-9-\.\_]+\.s3\.amazonaws\.com|s3://[a-zA-Z0-9-\.\_]+|s3-[a-zA-Z0-9-\.\_\/]+|s3.amazonaws.com/[a-zA-Z0-9-\.\_]+|s3.console.aws.amazon.com/s3/buckets/[a-zA-Z0-9-\.\_]+"  # https://regex101.com/r/6bLaKj/7
 credentials_regex = r"[pP]assword\s*:\s*[^\s]+|password is\s*:\s*[^\s]+|password is\s*\"[^\s]+"  # https://regex101.com/r/xQz9JT/3
@@ -40,18 +43,30 @@ aws_keys_regex = r"(?<![A-Za-z0-9/+=])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])|(?<![
 
 def check_token_validity():
     global output_directory
+    global slack_workspace
     try:
         r = requests.post(
             "https://slack.com/api/auth.test?token=" + token + "&pretty=1",
             headers={'Authorization': 'Bearer ' + token}).json()
         if str(r['ok']) == 'True':
             output_directory = str(r['team']) + ".slack.com"
-            print(termcolor.colored("Token looks valid! URL: " + str(r['url']) + " User: " + str(r['user']), "blue"))
+            slack_workspace = str(r['url'])
+            print(termcolor.colored("Token looks valid! URL: " + str(r['url']) + " User: " + str(r['user']), "green"))
             pathlib.Path(output_directory).mkdir(parents=True,
                                                  exist_ok=True)  # create files directory to keep things tidy
         else:
             print(termcolor.colored("Token not valid - maybe it's expired? Slack error: " + str(r['error']), "red"))
             exit()
+    except requests.exceptions.RequestException as exception:
+        print(exception)
+
+
+def print_interesting_information():
+    try:
+        r = requests.get(slack_workspace)
+        team_domains_match = re.findall(workspace_valid_emails_regex, str(r.content))
+        for domain in team_domains_match:
+            print(termcolor.colored("The following domains can be used on this Slack Workspace: " + domain, "green"))
     except requests.exceptions.RequestException as exception:
         print(exception)
 
@@ -262,6 +277,8 @@ def download_interesting_files():
 
 
 check_token_validity()
+
+print_interesting_information()
 
 dump_team_access_logs()
 
