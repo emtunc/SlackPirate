@@ -92,10 +92,9 @@ This will do the following:
 * Find any associated Workspaces that can be accessed using that cookie
 * Connect to any Workspaces that were returned
 * Look for API Tokens in each returned Workspace
-* Print to standard output for use in the next command:
+* Print to standard output for use in the next command
 
-
-    ./SlackPirate.py --token <token>
+        ./SlackPirate.py --token <token>
     
 This will do the following:
 * Check Token validity and only continue if Slack returns `True`
