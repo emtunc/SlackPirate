@@ -56,7 +56,7 @@ Tested and working on Windows 10, Ubuntu 18.04 and the latest Kali build.
 * `virtualenv SlackPirate`
 * `source SlackPirate/bin/activate`
 * `pip install -r requirements.txt`
-* `./SlackPirate.py`
+* `./SlackPirate.py --token`
 
 ### Linux
 * `git clone https://github.com/emtunc/SlackPirate`
