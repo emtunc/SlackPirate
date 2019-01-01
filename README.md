@@ -1,4 +1,4 @@
-# SlackPirate - Slack Enumeration Tool
+# SlackPirate - Slack Enumeration and Extraction Tool
 
 This is a tool developed in Python which uses the native Slack APIs to extract 'interesting' information from a Slack workspace given an access token.
 
