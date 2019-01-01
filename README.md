@@ -50,7 +50,7 @@ Make a copy of that and pass that in to the script using the `--token` flag.
 
 ## Building
 
-The script was developed using Python 3.7 - a quick test on Python 2 presented some compatability issues.
+The script was developed using Python 3.7 - a quick test on Python 2 presented some compatibility issues.
 
 Tested and working on Windows 10, Ubuntu 18.04 and the latest Kali build.
 

