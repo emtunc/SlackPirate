@@ -25,6 +25,7 @@ The tool uses the native Slack APIs to extract 'interesting' information and loo
 * Passwords
 * AWS Access/Secret keys
 * Private Keys
+* References to links and URLs that could provide further access to sensitive materials - think: Google Docs, Trello Invites, links to internal systems, etc
 * Files which could contain sensitive information such as .key, .sh, the words "password" or "secret" embedded in a document, etc
 
 ## Slack Cookie
@@ -105,7 +106,11 @@ This will do the following:
 * Find references to passwords and other credentials
 * Find references to AWS keys
 * Find references to private keys
+* Find references to interesting URLs and links
 * Lastly, the tool will attempt to download files based on pre-defined keywords
 
 ## Screenshots
 
+![Alt text](screenshots/SlackPirate%20--cookie.png?raw=true "Using the --cookie flag")
+
+![Alt text](screenshots/SlackPirate%20--token.png?raw=true "Using the --token flag")
