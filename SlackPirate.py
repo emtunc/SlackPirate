@@ -339,7 +339,7 @@ def find_private_keys():
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
-    file_cleanup(file_private_keys)
+    # file_cleanup(file_private_keys)
     print(termcolor.colored(
         "END: If any private keys were found, they will be here: ./" + output_directory + "/" + file_private_keys,
         "white", "on_green"))
