@@ -428,14 +428,15 @@ def file_cleanup(input_file):
 
     reference_file = pathlib.Path(output_directory + '/' + input_file)
     if reference_file.is_file():
-        with open(reference_file, 'r') as file:
+        with open(reference_file, 'r', encoding="utf-8") as file:
             lines = set(file.readlines())
-        with open(reference_file, 'w+') as file:
+        with open(reference_file, 'w+', encoding="utf-8") as file:
             for line in sorted(lines, key=str.lower):
                 if "com/archives/" not in line:
                     file.write(line)
     else:
         return
+
 
 is_cookie_flag_set()
 
