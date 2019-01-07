@@ -55,7 +55,7 @@ The script was developed using Python 3.7 - a quick test on Python 2 presented s
 
 Tested and working on Windows 10, Ubuntu 18.04 and the latest Kali build.
 
-#### Linux with virtualenv (Recommended)
+#### Linux with virtualenv
 
 * `git clone https://github.com/emtunc/SlackPirate`
 * `pip install virtualenv`
@@ -64,13 +64,14 @@ Tested and working on Windows 10, Ubuntu 18.04 and the latest Kali build.
 * `pip install -r requirements.txt`
 * `./SlackPirate.py --help`
 
-#### Linux
+#### Linux without virtualenv
+
 * `git clone https://github.com/emtunc/SlackPirate`
 * `chmod +x SlackPirate.py`
 * `pip install -r requirements.txt`
 * `./SlackPirate.py --help`
 
-#### Windows with virtualenv (Recommended)
+#### Windows with virtualenv
 
 * `git clone https://github.com/emtunc/SlackPirate`
 * `pip install virtualenv`
@@ -79,7 +80,7 @@ Tested and working on Windows 10, Ubuntu 18.04 and the latest Kali build.
 * `pip install -r requirements.txt`
 * `python SlackPirate.py --help`
 
-#### Windows
+#### Windows without virtualenv
 
 * `git clone https://github.com/emtunc/SlackPirate`
 * `pip install -r requirements.txt`
