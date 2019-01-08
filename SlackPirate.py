@@ -554,7 +554,7 @@ if __name__ == '__main__':
         collected_output_info = check_token_validity(token=provided_token)
         print_interesting_information(output_info=collected_output_info)
         dump_team_access_logs(token=provided_token, output_info=collected_output_info)
-        #dump_user_list(token=provided_token, output_info=collected_output_info)
+        dump_user_list(token=provided_token, output_info=collected_output_info)
         find_s3(token=provided_token, output_info=collected_output_info)
         find_credentials(token=provided_token, output_info=collected_output_info)
         find_aws_keys(token=provided_token, output_info=collected_output_info)
