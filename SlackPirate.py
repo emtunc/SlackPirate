@@ -355,7 +355,7 @@ def find_aws_keys(token, output_info: OutputInformation):
     try:
         r = None
         for query in AWS_KEYS_QUERIES:
-            params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100)
+            params = dict(token=token, query=query, pretty=1, count=100)
             r = requests.get("https://slack.com/api/search.messages",
                              params=params,
                              headers=SLACK_USER_AGENT).json()
@@ -367,7 +367,7 @@ def find_aws_keys(token, output_info: OutputInformation):
             while page <= value:
                 is_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
-                params = dict(token=token, query="\"{}\"".format(key), pretty=1, count=100, page=str(page))
+                params = dict(token=token, query=key, pretty=1, count=100, page=str(page))
                 r = requests.get(request_url, params=params, headers=SLACK_USER_AGENT).json()
                 regex_results = re.findall(AWS_KEYS_REGEX, str(r))
                 with open(output_info.output_directory + '/' + FILE_AWS_KEYS, 'a', encoding="utf-8") as log_output:
@@ -554,7 +554,7 @@ if __name__ == '__main__':
         collected_output_info = check_token_validity(token=provided_token)
         print_interesting_information(output_info=collected_output_info)
         dump_team_access_logs(token=provided_token, output_info=collected_output_info)
-        dump_user_list(token=provided_token, output_info=collected_output_info)
+        #dump_user_list(token=provided_token, output_info=collected_output_info)
         find_s3(token=provided_token, output_info=collected_output_info)
         find_credentials(token=provided_token, output_info=collected_output_info)
         find_aws_keys(token=provided_token, output_info=collected_output_info)
