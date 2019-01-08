@@ -173,7 +173,7 @@ def check_token_validity(token) -> OutputInformation:
     try:
         r = requests.post(
             "https://slack.com/api/auth.test?token=" + token + "&pretty=1",
-            headers={'Authorization': 'Bearer ' + token}).json()
+            headers={'Authorization': 'Bearer ' + token, **SLACK_USER_AGENT}).json()
         if str(r['ok']) == 'True':
             result = OutputInformation(output_directory=str(r['team']), slack_workspace=str(r['url']))
             print(termcolor.colored("INFO: Token looks valid! URL: " + str(r['url']) + " User: " + str(r['user']),
@@ -486,7 +486,7 @@ def download_interesting_files(token, output_info: OutputInformation):
                 is_rate_limited(r)
                 for file in r['files']['matches']:
                     file_name = file['name']
-                    r = requests.get(file['url_private'], headers={'Authorization': 'Bearer ' + token})
+                    r = requests.get(file['url_private'], headers={'Authorization': 'Bearer ' + token, **SLACK_USER_AGENT})
                     open(output_info.output_directory + '/downloads/' + ' ' + file_name.translate(
                         strip_bad_characters), 'wb').write(r.content)
                 page += 1
@@ -530,8 +530,8 @@ if __name__ == '__main__':
     parser.add_argument('--token', type=str, required=False,
                         help='Slack Workspace token. The token should start with XOX.')
     parser.add_argument('--version', action='version',
-                        version='SlackPirate.py v0.1. Developed by Mikail Tunç - @emtunc. '
-                                'https://github.com/emtunc/SlackPirate')
+                        version='SlackPirate.py v0.2. Developed by Mikail Tunç (@emtunc) with contributions from '
+                                'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
     args = parser.parse_args()
 
     if args.cookie is None and args.token is None:
