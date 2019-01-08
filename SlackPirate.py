@@ -19,8 +19,9 @@ parser.add_argument('--cookie', type=str, required=False, help='Slack \'d\' cook
                                                                ' to search for Workspaces associated with the cookie.'
                                                                ' Results along with tokens will be printed to stdout')
 parser.add_argument('--token', type=str, required=False, help='Slack Workspace token. The token should start with XOX.')
-parser.add_argument('--version', action='version', version='SlackPirate.py v0.1. Developed by Mikail Tunç - @emtunc. '
-                                                           'https://github.com/emtunc/SlackPirate')
+parser.add_argument('--version', action='version',
+                    version='SlackPirate.py v0.2. Developed by Mikail Tunç (@emtunc) with contributions from '
+                            'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
 args = parser.parse_args()
 
 if args.cookie is None and args.token is None:
