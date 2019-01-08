@@ -438,24 +438,25 @@ def file_cleanup(input_file):
         return
 
 
-is_cookie_flag_set()
+if __name__ == '__main__':
+    is_cookie_flag_set()
 
-check_token_validity()
+    check_token_validity()
 
-print_interesting_information()
+    print_interesting_information()
 
-dump_team_access_logs()
+    dump_team_access_logs()
 
-dump_user_list()
+    dump_user_list()
 
-find_s3()
+    find_s3()
 
-find_credentials()
+    find_credentials()
 
-find_aws_keys()
+    find_aws_keys()
 
-find_private_keys()
+    find_private_keys()
 
-find_interesting_links()
+    find_interesting_links()
 
-download_interesting_files()
+    download_interesting_files()
