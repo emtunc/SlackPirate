@@ -535,29 +535,48 @@ if __name__ == '__main__':
                              ' Results along with tokens will be printed to stdout')
     parser.add_argument('--token', type=str, required=False,
                         help='Slack Workspace token. The token should start with XOX.')
+    parser.add_argument('--no-team-access-logs', action='store_true', help='skips dumping of team access logs')
+    parser.add_argument('--no-user-list', action='store_true', help='skips retrieval of user list')
+    parser.add_argument('--no-s3-scan', action='store_true', help='skips searching for s3 references in messages')
+    parser.add_argument('--no-credential-scan', action='store_true',
+                        help='skips searching for messages referencing credentials')
+    parser.add_argument('--no-aws-key-scan', action='store_true', help='skips search for aws keys in messages')
+    parser.add_argument('--no-private-key-scan', action='store_true', help='skips search for private keys in messages')
+    parser.add_argument('--no-link-scan', action='store_true', help='skips searching for interesting links')
+    parser.add_argument('--no-file-download', action='store_true', help='skips downloading of files from the workspace')
     parser.add_argument('--version', action='version',
                         version='SlackPirate.py v0.2. Developed by Mikail Tunç (@emtunc) with contributions from '
                                 'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
     args = parser.parse_args()
 
-    if args.cookie is None and args.token is None:
+    if args.cookie is None and args.token is None:  # Must provide one or the other
         print(termcolor.colored("No arguments passed. Run SlackPirate.py --help ", "white", "on_red"))
         exit()
-    elif args.cookie and args.token:
+    elif args.cookie and args.token:  # May not provide both
         print(termcolor.colored("You cannot use both --cookie and --token flags at the same time", "white", "on_red"))
         exit()
-
-    if args.cookie:
+    elif args.cookie:  # Providing a cookie leads to a shorter execution path
         display_cookie_tokens(cookie=dict(d=args.cookie))
-    else:
-        provided_token = args.token
-        collected_output_info = check_token_validity(token=provided_token)
-        print_interesting_information(output_info=collected_output_info)
-        dump_team_access_logs(token=provided_token, output_info=collected_output_info)
-        dump_user_list(token=provided_token, output_info=collected_output_info)
-        find_s3(token=provided_token, output_info=collected_output_info)
-        find_credentials(token=provided_token, output_info=collected_output_info)
-        find_aws_keys(token=provided_token, output_info=collected_output_info)
-        find_private_keys(token=provided_token, output_info=collected_output_info)
-        find_interesting_links(token=provided_token, output_info=collected_output_info)
-        download_interesting_files(token=provided_token, output_info=collected_output_info)
+        exit()
+    # Baseline behavior
+    provided_token = args.token
+    collected_output_info = check_token_validity(token=provided_token)
+    print_interesting_information(output_info=collected_output_info)
+
+    # Possible scans to run along with flags that disable them
+    flags_and_scans = [
+        ('no_team_access_log', dump_team_access_logs),
+        ('no_user_list', dump_user_list),
+        ('no_s3_scan', find_s3),
+        ('no_credential_scan', find_credentials),
+        ('no_aws_key_scan', find_aws_keys),
+        ('no_private_key_scan', find_private_keys),
+        ('no_link_scan', find_interesting_links),
+        ('no_file_download', download_interesting_files),
+
+    ]
+
+    args_as_dict = vars(args)  # Using a dict makes the flags easier to check
+    for flag, scan in flags_and_scans:
+        if not args_as_dict.get(flag, None):
+            scan(token=provided_token, output_info=collected_output_info)
