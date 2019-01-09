@@ -152,7 +152,7 @@ def display_cookie_tokens(cookie, user_agent: str):
         if already_signed_in_match:
             print(termcolor.colored("This cookie has access to the following Workspaces: \n", "white", "on_blue"))
             for workspace in already_signed_in_match:
-                r = requests.get(workspace, cookies=cookie, headers={'User-Agent': user_agent})
+                r = requests.get(workspace, cookies=cookie)
                 regex_tokens = re.findall(SLACK_API_TOKEN_REGEX, str(r.content))
                 for slack_token in regex_tokens:
                     print(termcolor.colored("URL: " + workspace + " Token: " + slack_token, "white", "on_green"))
