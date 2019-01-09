@@ -540,7 +540,7 @@ if __name__ == '__main__':
     parser.add_argument('--token', type=str, required=False,
                         help='Slack Workspace token. The token should start with XOX.')
     parser.add_argument('--version', action='version',
-                        version='SlackPirate.py v0.3. Developed by Mikail Tunç (@emtunc) with contributions from '
+                        version='SlackPirate.py v0.4. Developed by Mikail Tunç (@emtunc) with contributions from '
                                 'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
     args = parser.parse_args()
 
