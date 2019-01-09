@@ -111,10 +111,9 @@ LINKS_REGEX = r"(?i)\b((?:https?:(?:/{1,3}|[a-z0-9%])|[a-z0-9.\-]+[.]" + TLD_GRO
 # Data Classes
 
 
-class OutputInformation:
+class ScanningContext:
     """
-    Collects the output directory and workspace name for use in writing output.
-    Also contains random user agent to be passed around
+    Contains context data for performing scans and storing results.
     """
     def __init__(self, output_directory: str, slack_workspace: str, user_agent: str):
         self.output_directory = output_directory
@@ -164,7 +163,7 @@ def display_cookie_tokens(cookie, user_agent: str):
     exit()
 
 
-def check_token_validity(token, user_agent: str) -> OutputInformation:
+def check_token_validity(token, user_agent: str) -> ScanningContext:
     # Use the Slack auth.test API to check whether the token is valid or not. If token is valid then create a
     # directory for results to go in - easy peasy.
     result = None
@@ -172,7 +171,7 @@ def check_token_validity(token, user_agent: str) -> OutputInformation:
         r = requests.post("https://slack.com/api/auth.test", params=dict(token=token, pretty=1),
                           headers={'Authorization': 'Bearer ' + token}).json()
         if str(r['ok']) == 'True':
-            result = OutputInformation(output_directory=str(r['team']), slack_workspace=str(r['url']), user_agent=user_agent)
+            result = ScanningContext(output_directory=str(r['team']), slack_workspace=str(r['url']), user_agent=user_agent)
             print(termcolor.colored("INFO: Token looks valid! URL: " + str(r['url']) + " User: " + str(r['user']),
                                     "white", "on_blue"))
             print(termcolor.colored("\n"))
@@ -187,7 +186,7 @@ def check_token_validity(token, user_agent: str) -> OutputInformation:
     return result
 
 
-def print_interesting_information(output_info: OutputInformation):
+def print_interesting_information(output_info: ScanningContext):
     """
     I wonder how many people know that Slack advertise the @domains that can be used to register for the Workspace?
     I've seen organizations leave old/expired/stale domains in here which can then be used by attackers to gain access
@@ -205,7 +204,7 @@ def print_interesting_information(output_info: OutputInformation):
         print(termcolor.colored(exception, "white", "on_red"))
 
 
-def dump_team_access_logs(token, output_info: OutputInformation):
+def dump_team_access_logs(token, output_info: ScanningContext):
     """
     You need the token of an elevated user (lucky you!) and the Workspace must be a paid one - i.e., not a free one
     The information here can be useful but I wouldn't fret about it - the other data is far more interesting
@@ -237,7 +236,7 @@ def dump_team_access_logs(token, output_info: OutputInformation):
     print(termcolor.colored("\n"))
 
 
-def dump_user_list(token, output_info: OutputInformation):
+def dump_user_list(token, output_info: ScanningContext):
     """
     In case you're wondering (hello fellow nerd/future me), the reason for limit=900 is because what Slack says:
     `To begin pagination, specify a limit value under 1000. We recommend no more than 200 results at a time.`
@@ -279,7 +278,7 @@ def dump_user_list(token, output_info: OutputInformation):
     print(termcolor.colored("\n"))
 
 
-def find_s3(token, output_info: OutputInformation):
+def find_s3(token, output_info: ScanningContext):
     print(termcolor.colored("START: Attempting to find references to S3 buckets", "white", "on_blue"))
     pagination = {}
 
@@ -315,7 +314,7 @@ def find_s3(token, output_info: OutputInformation):
     print(termcolor.colored("\n"))
 
 
-def find_credentials(token, output_info: OutputInformation):
+def find_credentials(token, output_info: ScanningContext):
     print(termcolor.colored("START: Attempting to find references to credentials", "white", "on_blue"))
     pagination = dict()
 
@@ -351,7 +350,7 @@ def find_credentials(token, output_info: OutputInformation):
     print(termcolor.colored("\n"))
 
 
-def find_aws_keys(token, output_info: OutputInformation):
+def find_aws_keys(token, output_info: ScanningContext):
     print(termcolor.colored("START: Attempting to find references to AWS keys", "white", "on_blue"))
     pagination = {}
 
@@ -386,7 +385,7 @@ def find_aws_keys(token, output_info: OutputInformation):
     print(termcolor.colored("\n"))
 
 
-def find_private_keys(token, output_info: OutputInformation):
+def find_private_keys(token, output_info: ScanningContext):
     """
     Searching for private keys by using certain keywords. Slack returns the actual string '\n' in the response so
     we're replacing the string with an actual \n new line :-)
@@ -427,7 +426,7 @@ def find_private_keys(token, output_info: OutputInformation):
     print(termcolor.colored("\n"))
 
 
-def find_interesting_links(token, output_info: OutputInformation):
+def find_interesting_links(token, output_info: ScanningContext):
     """
     Does a search for URI/URLs by searching for keywords such as 'amazonaws', 'jenkins', etc.
     We're using the special Slack search 'has:link' here.
@@ -465,7 +464,7 @@ def find_interesting_links(token, output_info: OutputInformation):
     print(termcolor.colored("\n"))
 
 
-def download_interesting_files(token, output_info: OutputInformation):
+def download_interesting_files(token, output_info: ScanningContext):
     """
     Downloads files which may be interesting to an attacker. Searches for certain keywords then downloads.
     bad_characters is used to strip out characters which though accepted in Slack, aren't accepted in Windows
@@ -509,7 +508,7 @@ def download_interesting_files(token, output_info: OutputInformation):
     print(termcolor.colored("\n"))
 
 
-def file_cleanup(input_file, output_info: OutputInformation):
+def file_cleanup(input_file, output_info: ScanningContext):
     """
     these few lines of sweetness do two things: (1) de-duplicate the content by using Python Sets and
     (2) remove lines containing "com/archives/" <-- this is found in a lot of the  responses and isn't very useful
@@ -539,30 +538,50 @@ if __name__ == '__main__':
                              ' Results along with tokens will be printed to stdout')
     parser.add_argument('--token', type=str, required=False,
                         help='Slack Workspace token. The token should start with XOX.')
+    parser.add_argument('--no-team-access-logs', action='store_true', help='skips dumping of team access logs')
+    parser.add_argument('--no-user-list', action='store_true', help='skips retrieval of user list')
+    parser.add_argument('--no-s3-scan', action='store_true', help='skips searching for s3 references in messages')
+    parser.add_argument('--no-credential-scan', action='store_true',
+                        help='skips searching for messages referencing credentials')
+    parser.add_argument('--no-aws-key-scan', action='store_true', help='skips search for aws keys in messages')
+    parser.add_argument('--no-private-key-scan', action='store_true', help='skips search for private keys in messages')
+    parser.add_argument('--no-link-scan', action='store_true', help='skips searching for interesting links')
+    parser.add_argument('--no-file-download', action='store_true', help='skips downloading of files from the workspace')
     parser.add_argument('--version', action='version',
                         version='SlackPirate.py v0.4. Developed by Mikail Tunç (@emtunc) with contributions from '
                                 'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
     args = parser.parse_args()
 
-    if args.cookie is None and args.token is None:
+    selected_agent = getUserAgent()
+
+    if args.cookie is None and args.token is None:  # Must provide one or the other
         print(termcolor.colored("No arguments passed. Run SlackPirate.py --help ", "white", "on_red"))
         exit()
-    elif args.cookie and args.token:
+    elif args.cookie and args.token:  # May not provide both
         print(termcolor.colored("You cannot use both --cookie and --token flags at the same time", "white", "on_red"))
         exit()
-
-    selected_agent = getUserAgent()
-    if args.cookie:
+    elif args.cookie:  # Providing a cookie leads to a shorter execution path
         display_cookie_tokens(cookie=dict(d=args.cookie), user_agent=selected_agent)
-    else:
-        provided_token = args.token
-        collected_output_info = check_token_validity(token=provided_token, user_agent=selected_agent)
-        print_interesting_information(output_info=collected_output_info)
-        dump_team_access_logs(token=provided_token, output_info=collected_output_info)
-        dump_user_list(token=provided_token, output_info=collected_output_info)
-        find_s3(token=provided_token, output_info=collected_output_info)
-        find_credentials(token=provided_token, output_info=collected_output_info)
-        find_aws_keys(token=provided_token, output_info=collected_output_info)
-        find_private_keys(token=provided_token, output_info=collected_output_info)
-        find_interesting_links(token=provided_token, output_info=collected_output_info)
-        download_interesting_files(token=provided_token, output_info=collected_output_info)
+        exit()
+    # Baseline behavior
+    provided_token = args.token
+    collected_output_info = check_token_validity(token=provided_token, user_agent=selected_agent)
+    print_interesting_information(output_info=collected_output_info)
+
+    # Possible scans to run along with flags that disable them
+    flags_and_scans = [
+        ('no_team_access_log', dump_team_access_logs),
+        ('no_user_list', dump_user_list),
+        ('no_s3_scan', find_s3),
+        ('no_credential_scan', find_credentials),
+        ('no_aws_key_scan', find_aws_keys),
+        ('no_private_key_scan', find_private_keys),
+        ('no_link_scan', find_interesting_links),
+        ('no_file_download', download_interesting_files),
+
+    ]
+
+    args_as_dict = vars(args)  # Using a dict makes the flags easier to check
+    for flag, scan in flags_and_scans:
+        if not args_as_dict.get(flag, None):
+            scan(token=provided_token, output_info=collected_output_info)
