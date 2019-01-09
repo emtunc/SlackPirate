@@ -211,6 +211,7 @@ def dump_team_access_logs(token, output_info: OutputInformation):
     The information here can be useful but I wouldn't fret about it - the other data is far more interesting
     """
 
+    results = []
     print(termcolor.colored("START: Attempting download Workspace access logs", "white", "on_blue"))
     try:
         r = requests.get("https://slack.com/api/team.accessLogs",
@@ -219,8 +220,9 @@ def dump_team_access_logs(token, output_info: OutputInformation):
         is_rate_limited(r)
         if str(r['ok']) == 'True':
             for value in r['logins']:
-                with open(output_info.output_directory + '/' + FILE_ACCESS_LOGS, 'a', encoding="utf-8") as outfile:
-                    json.dump(value, outfile, indent=4, sort_keys=True, ensure_ascii=False)
+                results.append(value)
+            with open(output_info.output_directory + '/' + FILE_ACCESS_LOGS, 'a', encoding="utf-8") as outfile:
+                json.dump(results, outfile, indent=4, sort_keys=True, ensure_ascii=False)
         else:
             print(termcolor.colored(
                 "END: Unable to dump access logs (this is normal if you don't have a privileged token on a non-free "
@@ -247,13 +249,15 @@ def dump_user_list(token, output_info: OutputInformation):
 
     print(termcolor.colored("START: Attempting to download Workspace user list", "white", "on_blue"))
     pagination_cursor = ''  # virtual pagination - apparently this is what the cool kids do these days :-)
+    results = []
     try:
         r = requests.get("https://slack.com/api/users.list",
                          params=dict(token=token, pretty=1, limit=1, cursor=pagination_cursor),
                          headers={'User-Agent': output_info.user_agent}).json()
         is_rate_limited(r)
         if str(r['ok']) == 'False':
-            print(termcolor.colored("END: Unable to dump the user list. Slack error: " + str(r['error']), "yellow"))
+            print(termcolor.colored("END: Unable to dump the user list. Slack error: " + str(r['error']),
+                                    "white", "on_yellow"))
             print(termcolor.colored("\n"))
         else:
             pagination_cursor = r['response_metadata']['next_cursor']
@@ -263,8 +267,9 @@ def dump_user_list(token, output_info: OutputInformation):
                 r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
                 for value in r['members']:
                     pagination_cursor = r['response_metadata']['next_cursor']
-                    with open(output_info.output_directory + '/' + FILE_USER_LIST, 'a', encoding="utf-8") as outfile:
-                        json.dump(value, outfile, indent=4, sort_keys=True, ensure_ascii=True)
+                    results.append(value)
+            with open(output_info.output_directory + '/' + FILE_USER_LIST, 'a', encoding="utf-8") as outfile:
+                json.dump(results, outfile, indent=4, sort_keys=True, ensure_ascii=True)
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
     print(
@@ -535,7 +540,7 @@ if __name__ == '__main__':
     parser.add_argument('--token', type=str, required=False,
                         help='Slack Workspace token. The token should start with XOX.')
     parser.add_argument('--version', action='version',
-                        version='SlackPirate.py v0.3. Developed by Mikail Tunç (@emtunc) with contributions from '
+                        version='SlackPirate.py v0.4. Developed by Mikail Tunç (@emtunc) with contributions from '
                                 'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
     args = parser.parse_args()
 
