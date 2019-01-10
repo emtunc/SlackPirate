@@ -115,3 +115,9 @@ This will do the following:
 ![Alt text](screenshots/SlackPirate%20--cookie.png?raw=true "Using the --cookie flag")
 
 ![Alt text](screenshots/SlackPirate%20--token.png?raw=true "Using the --token flag")
+
+## Join the conversation!
+
+A public Slack Workspace has been set-up where anyone can join and discuss new features, changes, feature requests or simply ask for help. Here's the invite link: 
+
+https://join.slack.com/t/slackpirate/shared_invite/enQtNTIyNjMxNDUyMzc0LTkzY2RkNGRlYTFiNWQ4OTYxMjYyZDRjZTAxZmEyNzAwZWVkYmVmZjk2MzJmYWQ5ODI4MmYxNmQyNDk2OTQ3MTQ
