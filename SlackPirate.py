@@ -530,7 +530,7 @@ if __name__ == '__main__':
     # Initialise the colorama module - this is used to print colourful messages - life's too dull otherwise
     colorama.init()
 
-    parser = argparse.ArgumentParser(description="This is a tool developed in Python which uses the native Slack APIs "
+    parser = argparse.ArgumentParser(argument_default=None, description="This is a tool developed in Python which uses the native Slack APIs "
                                                  "to extract 'interesting' information from Slack Workspaces.")
     parser.add_argument('--cookie', type=str, required=False,
                         help='Slack \'d\' cookie. This flag will instruct the tool'
@@ -538,18 +538,47 @@ if __name__ == '__main__':
                              ' Results along with tokens will be printed to stdout')
     parser.add_argument('--token', type=str, required=False,
                         help='Slack Workspace token. The token should start with XOX.')
-    parser.add_argument('--no-team-access-logs', action='store_true', help='skips dumping of team access logs')
-    parser.add_argument('--no-user-list', action='store_true', help='skips retrieval of user list')
-    parser.add_argument('--no-s3-scan', action='store_true', help='skips searching for s3 references in messages')
-    parser.add_argument('--no-credential-scan', action='store_true',
-                        help='skips searching for messages referencing credentials')
-    parser.add_argument('--no-aws-key-scan', action='store_true', help='skips search for aws keys in messages')
-    parser.add_argument('--no-private-key-scan', action='store_true', help='skips search for private keys in messages')
-    parser.add_argument('--no-link-scan', action='store_true', help='skips searching for interesting links')
-    parser.add_argument('--no-file-download', action='store_true', help='skips downloading of files from the workspace')
+    parser.add_argument('--team-access-logs', dest='team_access_logs', action='store_true',
+                        help='enable retrieval of team access logs')
+    parser.add_argument('--no-team-access-logs', dest='team_access_logs', action='store_false',
+                        help='disable retrieval of team access logs')
+    parser.add_argument('--user-list', dest='user_list', action='store_true', 
+                        help='enable retrieval of user list')
+    parser.add_argument('--no-user-list', dest='user_list', action='store_false',
+                        help='disable retrieval of user list')
+    parser.add_argument('--s3-scan', dest='s3_scan', action='store_true',
+                        help='enable searching for s3 references in messages')
+    parser.add_argument('--no-s3-scan', dest='s3_scan', action='store_false',
+                        help='disable searching for s3 references in messages')
+    parser.add_argument('--credential-scan', dest='credential_scan', action='store_true',
+                        help='enable searching for messages referencing credentials')
+    parser.add_argument('--no-credential-scan', dest='credential_scan', action='store_false',
+                        help='disable searching for messages referencing credentials')
+    parser.add_argument('--aws-key-scan', dest='aws_key_scan', action='store_true',
+                        help='enable searching for aws keys in messages')
+    parser.add_argument('--no-aws-key-scan', dest='aws_key_scan', action='store_false',
+                        help='disable searching for aws keys in messages')
+    parser.add_argument('--private-key-scan', dest='private_key_scan', action='store_true',
+                        help='enable search for private keys in messages')
+    parser.add_argument('--no-private-key-scan', dest='private_key_scan', action='store_false',
+                        help='disable search for private keys in messages')
+    parser.add_argument('--link-scan', dest='link_scan', action='store_true',
+                        help='enable searching for interesting links')
+    parser.add_argument('--no-link-scan', dest='link_scan', action='store_false',
+                        help='disable searching for interesting links')
+    parser.add_argument('--file-download', dest='file_download', action='store_true',
+                        help='enable downloading of files from the workspace')
+    parser.add_argument('--no-file-download', dest='file_download', action='store_false',
+                        help='disable downloading of files from the workspace')
     parser.add_argument('--version', action='version',
                         version='SlackPirate.py v0.4. Developed by Mikail Tunç (@emtunc) with contributions from '
                                 'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
+    """
+    Even with "argument_default=None" in the constructor, all flags were False, so we explicitly set every flag to None
+    This is necessary, because we want to differentiate between "all False" and "any False"
+    """
+    parser.set_defaults(team_access_logs=None, user_list=None, s3_scan=None, credential_scan=None, aws_key_scan=None,
+                        private_key_scan=None, link_scan=None, file_download=None)
     args = parser.parse_args()
 
     selected_agent = getUserAgent()
@@ -568,20 +597,41 @@ if __name__ == '__main__':
     collected_output_info = check_token_validity(token=provided_token, user_agent=selected_agent)
     print_interesting_information(output_info=collected_output_info)
 
-    # Possible scans to run along with flags that disable them
+    # Possible scans to run along with their flags
     flags_and_scans = [
-        ('no_team_access_log', dump_team_access_logs),
-        ('no_user_list', dump_user_list),
-        ('no_s3_scan', find_s3),
-        ('no_credential_scan', find_credentials),
-        ('no_aws_key_scan', find_aws_keys),
-        ('no_private_key_scan', find_private_keys),
-        ('no_link_scan', find_interesting_links),
-        ('no_file_download', download_interesting_files),
-
+        ('team_access_logs', dump_team_access_logs),
+        ('user_list', dump_user_list),
+        ('s3_scan', find_s3),
+        ('credential_scan', find_credentials),
+        ('aws_key_scan', find_aws_keys),
+        ('private_key_scan', find_private_keys),
+        ('link_scan', find_interesting_links),
+        ('file_download', download_interesting_files),
     ]
 
     args_as_dict = vars(args)  # Using a dict makes the flags easier to check
-    for flag, scan in flags_and_scans:
-        if not args_as_dict.get(flag, None):
-            scan(token=provided_token, output_info=collected_output_info)
+    # delete the cookie and token args which are not scan filter related so we can run all() and any() on the dict values
+    del args_as_dict['cookie']
+    del args_as_dict['token']
+
+    # no flags were specified - we run all scans
+    allNone = all(value == None for value in args_as_dict.values())
+    if allNone:
+        for flag, scan in flags_and_scans:
+            scan(token=provided_token, output_info=collected_output_info) 
+        exit()
+
+    anyTrue = any(value == True for value in args_as_dict.values()) # are there any True flags? 
+    anyFalse = any(value == False for value in args_as_dict.values()) # are there any False flags?
+
+    if (anyTrue and anyFalse): # There were both True and False arguments
+        print(termcolor.colored("You cannot use bot enable flags and disable flags at the same time", "white", "on_red"))
+        exit()
+    elif anyTrue: # There were only enable flags specified
+        for flag, scan in flags_and_scans:
+            if args_as_dict.get(flag, None): # if flag is True, then run the scan
+                scan(token=provided_token, output_info=collected_output_info)
+    else: # anyFalse - There were only disable flags specified
+        for flag, scan in flags_and_scans:
+            if not args_as_dict.get(flag, None) == False: # if flag is not False (None), then run the scan
+                scan(token=provided_token, output_info=collected_output_info)
