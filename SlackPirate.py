@@ -16,13 +16,14 @@ from constants import getUserAgent
 # Query params
 MAX_RETRIEVAL_COUNT = 900
 # Output file names
-FILE_USER_LIST = "user-list.json"
-FILE_ACCESS_LOGS = "access-logs.json"
-FILE_S3 = "S3.txt"
-FILE_CREDENTIALS = "Passwords.txt"
-FILE_AWS_KEYS = "aws-keys.txt"
-FILE_PRIVATE_KEYS = "private-keys.txt"
-FILE_LINKS = "URLs.txt"
+TIMESTAMP = time.strftime("%Y%m%d-%H%M%S")
+FILE_USER_LIST = "user-list_" + TIMESTAMP + ".json"
+FILE_ACCESS_LOGS = "access-logs_" + TIMESTAMP + ".json"
+FILE_S3 = "S3_" + TIMESTAMP + ".txt"
+FILE_CREDENTIALS = "Passwords_" + TIMESTAMP + ".txt"
+FILE_AWS_KEYS = "aws-keys_" + TIMESTAMP + ".txt"
+FILE_PRIVATE_KEYS = "private-keys_" + TIMESTAMP + ".txt"
+FILE_LINKS = "URLs_" + TIMESTAMP + ".txt"
 
 # Query pieces
 S3_QUERIES = ["s3.amazonaws.com", "s3://", "https://s3", "http://s3"]
