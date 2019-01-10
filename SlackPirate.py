@@ -635,6 +635,3 @@ if __name__ == '__main__':
         for flag, scan in flags_and_scans:
             if not args_as_dict.get(flag, None) == False: # if flag is not False (None), then run the scan
                 scan(token=provided_token, output_info=collected_output_info)
-
-
-
