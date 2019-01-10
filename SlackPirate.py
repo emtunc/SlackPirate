@@ -571,7 +571,7 @@ if __name__ == '__main__':
     parser.add_argument('--no-file-download', dest='file_download', action='store_false',
                         help='disable downloading of files from the workspace')
     parser.add_argument('--version', action='version',
-                        version='SlackPirate.py v0.4. Developed by Mikail Tunç (@emtunc) with contributions from '
+                        version='SlackPirate.py v0.5. Developed by Mikail Tunç (@emtunc) with contributions from '
                                 'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
     """
     Even with "argument_default=None" in the constructor, all flags were False, so we explicitly set every flag to None
@@ -615,23 +615,18 @@ if __name__ == '__main__':
     del args_as_dict['token']
 
     # no flags were specified - we run all scans
-    allNone = all(value == None for value in args_as_dict.values())
-    if allNone:
+    no_flags_specified = all(value == None for value in args_as_dict.values())
+    any_true = any(value == True for value in args_as_dict.values())  # are there any True flags?
+
+    if no_flags_specified:
         for flag, scan in flags_and_scans:
             scan(token=provided_token, output_info=collected_output_info) 
         exit()
-
-    anyTrue = any(value == True for value in args_as_dict.values()) # are there any True flags? 
-    anyFalse = any(value == False for value in args_as_dict.values()) # are there any False flags?
-
-    if (anyTrue and anyFalse): # There were both True and False arguments
-        print(termcolor.colored("You cannot use bot enable flags and disable flags at the same time", "white", "on_red"))
-        exit()
-    elif anyTrue: # There were only enable flags specified
+    elif any_true:  # There were only enable flags specified
         for flag, scan in flags_and_scans:
             if args_as_dict.get(flag, None): # if flag is True, then run the scan
                 scan(token=provided_token, output_info=collected_output_info)
-    else: # anyFalse - There were only disable flags specified
+    else:  # anyFalse - There were only disable flags specified
         for flag, scan in flags_and_scans:
             if not args_as_dict.get(flag, None) == False: # if flag is not False (None), then run the scan
                 scan(token=provided_token, output_info=collected_output_info)
