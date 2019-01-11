@@ -171,7 +171,7 @@ def check_token_validity(token, user_agent: str) -> ScanningContext:
         r = requests.post("https://slack.com/api/auth.test", params=dict(token=token, pretty=1),
                           headers={'Authorization': 'Bearer ' + token}).json()
         if str(r['ok']) == 'True':
-            result = ScanningContext(output_directory=str(r['team']), slack_workspace=str(r['url']), user_agent=user_agent)
+            result = ScanningContext(output_directory=str(r['team']) + '_' + time.strftime("%Y%m%d-%H%M%S"), slack_workspace=str(r['url']), user_agent=user_agent)
             print(termcolor.colored("INFO: Token looks valid! URL: " + str(r['url']) + " User: " + str(r['user']),
                                     "white", "on_blue"))
             print(termcolor.colored("\n"))
