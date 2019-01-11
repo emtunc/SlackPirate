@@ -192,9 +192,13 @@ def check_token_validity(token, user_agent: str) -> ScanningContext:
 
 
 def check_if_admin_token(token, output_info: ScanningContext):
+    """
+    Checks to see if the token provided is an admin, owner, or primary_owner. If it is, print a message to stdout
+    """
 
     try:
-        r = requests.get("https://slack.com/api/users.info", params=dict(token=token, pretty=1, user=output_info.user_id, headers={'User-Agent': output_info.user_agent})).json()
+        r = requests.get("https://slack.com/api/users.info", params=dict(
+            token=token, pretty=1, user=output_info.user_id, headers={'User-Agent': output_info.user_agent})).json()
         if r['user']['is_admin'] or r['user']['is_owner'] or r['user']['is_primary_owner']:
             print(termcolor.colored("BINGO: You seem to be in possession of an admin token!", "white", "on_magenta"))
             print(termcolor.colored("\n"))
@@ -589,7 +593,7 @@ if __name__ == '__main__':
     parser.add_argument('--no-file-download', dest='file_download', action='store_false',
                         help='disable downloading of files from the workspace')
     parser.add_argument('--version', action='version',
-                        version='SlackPirate.py v0.5. Developed by Mikail Tunç (@emtunc) with contributions from '
+                        version='SlackPirate.py v0.6. Developed by Mikail Tunç (@emtunc) with contributions from '
                                 'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
     """
     Even with "argument_default=None" in the constructor, all flags were False, so we explicitly set every flag to None
