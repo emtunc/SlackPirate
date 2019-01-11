@@ -146,7 +146,7 @@ def display_cookie_tokens(cookie, user_agent: str):
     tokens to long-term storage especially as they are valid pretty much forever. I'll leave as is for now...
     """
     try:
-        r = requests.get("https://slackpirate.slack.com", cookies=cookie)
+        r = requests.get("https://slackpirate-donotuse.slack.com", cookies=cookie)
         already_signed_in_match = re.findall(ALREADY_SIGNED_IN_TEAM_REGEX, str(r.content))
         if already_signed_in_match:
             print(termcolor.colored("This cookie has access to the following Workspaces: \n", "white", "on_blue"))
@@ -617,16 +617,21 @@ if __name__ == '__main__':
     # no flags were specified - we run all scans
     no_flags_specified = all(value == None for value in args_as_dict.values())
     any_true = any(value == True for value in args_as_dict.values())  # are there any True flags?
+    any_false = any(value == False for value in args_as_dict.values()) # are there any False flags?
 
     if no_flags_specified:
         for flag, scan in flags_and_scans:
             scan(token=provided_token, output_info=collected_output_info)
         exit()
+    elif any_true and any_false:  # There were both True and False arguments
+        print(
+            termcolor.colored("You cannot use both enable flags and disable flags at the same time", "white", "on_red"))
+        exit()
     elif any_true:  # There were only enable flags specified
         for flag, scan in flags_and_scans:
-            if args_as_dict.get(flag, None): # if flag is True, then run the scan
+            if args_as_dict.get(flag, None):  # if flag is True, then run the scan
                 scan(token=provided_token, output_info=collected_output_info)
     else:  # anyFalse - There were only disable flags specified
         for flag, scan in flags_and_scans:
-            if not args_as_dict.get(flag, None) == False: # if flag is not False (None), then run the scan
+            if not args_as_dict.get(flag, None) == False:  # if flag is not False (None), then run the scan
                 scan(token=provided_token, output_info=collected_output_info)
