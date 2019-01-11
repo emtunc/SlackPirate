@@ -62,7 +62,6 @@ Tested and working on Windows 10, Ubuntu 18.04 and the latest Kali build.
 * `virtualenv SlackPirate`
 * `source SlackPirate/bin/activate`
 * `pip install -r requirements.txt`
-* `nosetests`
 * `./SlackPirate.py --help`
 
 #### Linux without virtualenv
@@ -70,7 +69,6 @@ Tested and working on Windows 10, Ubuntu 18.04 and the latest Kali build.
 * `git clone https://github.com/emtunc/SlackPirate`
 * `chmod +x SlackPirate.py`
 * `pip install -r requirements.txt`
-* `nosetests`
 * `./SlackPirate.py --help`
 
 #### Windows with virtualenv

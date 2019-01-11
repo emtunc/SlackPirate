@@ -13,8 +13,6 @@ from constants import getUserAgent
 #############
 # Constants #
 #############
-# Response errors
-ERROR_RATE_LIMITED = 'ratelimited'
 # Query params
 MAX_RETRIEVAL_COUNT = 900
 # Output file names
@@ -124,7 +122,7 @@ class ScanningContext:
 
 
 # Module functionality
-def sleep_if_needed(slack_api_json_response):
+def is_rate_limited(slack_api_json_response):
     """
     All this function does is check if the response tells us we're being rate-limited. If it is, sleep for
     60 seconds then continue. Previously I was proactively sleeping for 60 seconds before the documented rate-limit
@@ -132,7 +130,7 @@ def sleep_if_needed(slack_api_json_response):
     more lenient then what they have documented which is a good thing for us but meant that a proactive rate-limit
     would sleep prematurely)
     """
-    if slack_api_json_response['ok'] is False and slack_api_json_response['error'] == ERROR_RATE_LIMITED:
+    if slack_api_json_response['ok'] is False and slack_api_json_response['error'] == 'ratelimited':
         print(termcolor.colored("INFO: Slack API rate limit hit - sleeping for 60 seconds", "white", "on_blue"))
         time.sleep(60)
     else:
@@ -218,7 +216,7 @@ def dump_team_access_logs(token, output_info: ScanningContext):
         r = requests.get("https://slack.com/api/team.accessLogs",
                          params=dict(token=token, pretty=1, count=MAX_RETRIEVAL_COUNT),
                          headers={'User-Agent': output_info.user_agent}).json()
-        sleep_if_needed(r)
+        is_rate_limited(r)
         if str(r['ok']) == 'True':
             for value in r['logins']:
                 results.append(value)
@@ -255,7 +253,7 @@ def dump_user_list(token, output_info: ScanningContext):
         r = requests.get("https://slack.com/api/users.list",
                          params=dict(token=token, pretty=1, limit=1, cursor=pagination_cursor),
                          headers={'User-Agent': output_info.user_agent}).json()
-        sleep_if_needed(r)
+        is_rate_limited(r)
         if str(r['ok']) == 'False':
             print(termcolor.colored("END: Unable to dump the user list. Slack error: " + str(r['error']),
                                     "white", "on_yellow"))
@@ -290,13 +288,13 @@ def find_s3(token, output_info: ScanningContext):
             r = requests.get("https://slack.com/api/search.messages",
                              params=dict(token=token, query="\"{}\"".format(query), pretty=1, count=100),
                              headers={'User-Agent': output_info.user_agent}).json()
-            sleep_if_needed(r)
+            is_rate_limited(r)
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
             page = 1
             while page <= value:
-                sleep_if_needed(r)
+                is_rate_limited(r)
                 params = dict(token=token, query="\"{}\"".format(key), pretty=1, count=100, page=str(page))
                 r = requests.get("https://slack.com/api/search.messages",
                                  params=params,
@@ -327,13 +325,13 @@ def find_credentials(token, output_info: ScanningContext):
             r = requests.get("https://slack.com/api/search.messages",
                              params=params,
                              headers={'User-Agent': output_info.user_agent}).json()
-            sleep_if_needed(r)
+            is_rate_limited(r)
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
             page = 1
             while page <= value:
-                sleep_if_needed(r)
+                is_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
                 params = dict(token=token, query="\"{}\"".format(key), pretty=1, count=100, page=str(page))
                 r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
@@ -363,13 +361,13 @@ def find_aws_keys(token, output_info: ScanningContext):
             r = requests.get("https://slack.com/api/search.messages",
                              params=params,
                              headers={'User-Agent': output_info.user_agent}).json()
-            sleep_if_needed(r)
+            is_rate_limited(r)
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
             page = 1
             while page <= value:
-                sleep_if_needed(r)
+                is_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
                 params = dict(token=token, query=key, pretty=1, count=100, page=str(page))
                 r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
@@ -403,13 +401,13 @@ def find_private_keys(token, output_info: ScanningContext):
             r = requests.get("https://slack.com/api/search.messages",
                              params=params,
                              headers={'User-Agent': output_info.user_agent}).json()
-            sleep_if_needed(r)
+            is_rate_limited(r)
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
             page = 1
             while page <= value:
-                sleep_if_needed(r)
+                is_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
                 params = dict(token=token, query="\"{}\"".format(key), pretty=1, count=100, page=str(page))
                 r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
@@ -443,13 +441,13 @@ def find_interesting_links(token, output_info: ScanningContext):
             request_url = "https://slack.com/api/search.messages"
             params = dict(token=token, query="has:link {}".format(query), pretty=1, count=100)
             r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
-            sleep_if_needed(r)
+            is_rate_limited(r)
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
             page = 1
             while page <= value:
-                sleep_if_needed(r)
+                is_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
                 params = dict(token=token, query="has:link {}".format(key), pretty=1, count=100, page=str(page))
                 r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
@@ -484,7 +482,7 @@ def download_interesting_files(token, output_info: ScanningContext):
             request_url = "https://slack.com/api/search.files"
             params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100)
             r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
-            sleep_if_needed(r)
+            is_rate_limited(r)
             pagination[query] = (r['files']['pagination']['page_count'])
 
         for key, value in pagination.items():
@@ -493,7 +491,7 @@ def download_interesting_files(token, output_info: ScanningContext):
                 request_url = "https://slack.com/api/search.files"
                 params = dict(token=token, query="\"{}\"".format(key), pretty=1, count=100, page=str(page))
                 r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
-                sleep_if_needed(r)
+                is_rate_limited(r)
                 for file in r['files']['matches']:
                     file_name = file['name']
                     r = requests.get(file['url_private'], headers={'Authorization': 'Bearer ' + token,
@@ -532,9 +530,8 @@ if __name__ == '__main__':
     # Initialise the colorama module - this is used to print colourful messages - life's too dull otherwise
     colorama.init()
 
-    parser = argparse.ArgumentParser(argument_default=None,
-                                     description="This is a tool developed in Python which uses the native Slack "
-                                                 "APIs to extract 'interesting' information from Slack Workspaces.")
+    parser = argparse.ArgumentParser(argument_default=None, description="This is a tool developed in Python which uses the native Slack APIs "
+                                                 "to extract 'interesting' information from Slack Workspaces.")
     parser.add_argument('--cookie', type=str, required=False,
                         help='Slack \'d\' cookie. This flag will instruct the tool'
                              ' to search for Workspaces associated with the cookie.'
@@ -613,8 +610,7 @@ if __name__ == '__main__':
     ]
 
     args_as_dict = vars(args)  # Using a dict makes the flags easier to check
-    # delete the cookie and token args which are not scan filter related so we can run all() and any()
-    # on the dict values
+    # delete the cookie and token args which are not scan filter related so we can run all() and any() on the dict values
     del args_as_dict['cookie']
     del args_as_dict['token']
 
@@ -626,11 +622,11 @@ if __name__ == '__main__':
         for flag, scan in flags_and_scans:
             scan(token=provided_token, output_info=collected_output_info)
         exit()
-    elif any_true:  # There was at least one "enable" flag specified
+    elif any_true:  # There were only enable flags specified
         for flag, scan in flags_and_scans:
             if args_as_dict.get(flag, None): # if flag is True, then run the scan
                 scan(token=provided_token, output_info=collected_output_info)
-    else:  # There were only disable flags specified
+    else:  # anyFalse - There were only disable flags specified
         for flag, scan in flags_and_scans:
             if not args_as_dict.get(flag, None) == False: # if flag is not False (None), then run the scan
                 scan(token=provided_token, output_info=collected_output_info)
