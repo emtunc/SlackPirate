@@ -115,10 +115,11 @@ class ScanningContext:
     """
     Contains context data for performing scans and storing results.
     """
-    def __init__(self, output_directory: str, slack_workspace: str, user_agent: str):
+    def __init__(self, output_directory: str, slack_workspace: str, user_agent: str, user_id: str):
         self.output_directory = output_directory
         self.slack_workspace = slack_workspace
         self.user_agent = user_agent
+        self.user_id = user_id
 
 
 # Module functionality
@@ -164,14 +165,18 @@ def display_cookie_tokens(cookie, user_agent: str):
 
 
 def check_token_validity(token, user_agent: str) -> ScanningContext:
-    # Use the Slack auth.test API to check whether the token is valid or not. If token is valid then create a
-    # directory for results to go in - easy peasy.
+    """
+    Use the Slack auth.test API to check whether the token is valid or not. If token is valid then create a
+    directory for results to go in - easy peasy.
+    """
     result = None
+
     try:
         r = requests.post("https://slack.com/api/auth.test", params=dict(token=token, pretty=1),
                           headers={'Authorization': 'Bearer ' + token}).json()
         if str(r['ok']) == 'True':
-            result = ScanningContext(output_directory=str(r['team']) + '_' + time.strftime("%Y%m%d-%H%M%S"), slack_workspace=str(r['url']), user_agent=user_agent)
+            result = ScanningContext(output_directory=str(r['team']) + '_' + time.strftime("%Y%m%d-%H%M%S"),
+                                     slack_workspace=str(r['url']), user_id=str(r['user_id']), user_agent=user_agent)
             print(termcolor.colored("INFO: Token looks valid! URL: " + str(r['url']) + " User: " + str(r['user']),
                                     "white", "on_blue"))
             print(termcolor.colored("\n"))
@@ -184,6 +189,23 @@ def check_token_validity(token, user_agent: str) -> ScanningContext:
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
     return result
+
+
+def check_if_admin_token(token, output_info: ScanningContext):
+    """
+    Checks to see if the token provided is an admin, owner, or primary_owner. If it is, print a message to stdout
+    """
+
+    try:
+        r = requests.get("https://slack.com/api/users.info", params=dict(
+            token=token, pretty=1, user=output_info.user_id, headers={'User-Agent': output_info.user_agent})).json()
+        if r['user']['is_admin'] or r['user']['is_owner'] or r['user']['is_primary_owner']:
+            print(termcolor.colored("BINGO: You seem to be in possession of an admin token!", "white", "on_magenta"))
+            print(termcolor.colored("\n"))
+        else:
+            return
+    except requests.exceptions.RequestException as exception:
+        print(termcolor.colored(exception, "white", "on_red"))
 
 
 def print_interesting_information(output_info: ScanningContext):
@@ -571,7 +593,7 @@ if __name__ == '__main__':
     parser.add_argument('--no-file-download', dest='file_download', action='store_false',
                         help='disable downloading of files from the workspace')
     parser.add_argument('--version', action='version',
-                        version='SlackPirate.py v0.5. Developed by Mikail Tunç (@emtunc) with contributions from '
+                        version='SlackPirate.py v0.6. Developed by Mikail Tunç (@emtunc) with contributions from '
                                 'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
     """
     Even with "argument_default=None" in the constructor, all flags were False, so we explicitly set every flag to None
@@ -595,6 +617,7 @@ if __name__ == '__main__':
     # Baseline behavior
     provided_token = args.token
     collected_output_info = check_token_validity(token=provided_token, user_agent=selected_agent)
+    check_if_admin_token(token=provided_token, output_info=collected_output_info)
     print_interesting_information(output_info=collected_output_info)
 
     # Possible scans to run along with their flags
