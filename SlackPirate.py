@@ -134,11 +134,12 @@ def is_rate_limited(slack_api_json_response):
     if slack_api_json_response['ok'] is False and slack_api_json_response['error'] == 'ratelimited':
         print(termcolor.colored("INFO: Slack API rate limit hit - sleeping for 60 seconds", "white", "on_blue"))
         time.sleep(60)
+        return True
     else:
-        return
+        return False
 
 
-def display_cookie_tokens(cookie, user_agent: str):
+def display_cookie_tokens(cookie):
     """
     If the --cookie flag is set then the tool connect to a Slack Workspace that you won't be a member of (like mine)
     then RegEx out the Workspaces you're logged in to. It will then connect to each one of those Workspaces then
@@ -272,10 +273,12 @@ def dump_user_list(token, output_info: ScanningContext):
     pagination_cursor = ''  # virtual pagination - apparently this is what the cool kids do these days :-)
     results = []
     try:
-        r = requests.get("https://slack.com/api/users.list",
+        while True:
+            r = requests.get("https://slack.com/api/users.list",
                          params=dict(token=token, pretty=1, limit=1, cursor=pagination_cursor),
                          headers={'User-Agent': output_info.user_agent}).json()
-        is_rate_limited(r)
+            if not is_rate_limited(r):
+                break
         if str(r['ok']) == 'False':
             print(termcolor.colored("END: Unable to dump the user list. Slack error: " + str(r['error']),
                                     "white", "on_yellow"))
@@ -307,10 +310,12 @@ def find_s3(token, output_info: ScanningContext):
     try:
         r = None
         for query in S3_QUERIES:
-            r = requests.get("https://slack.com/api/search.messages",
-                             params=dict(token=token, query="\"{}\"".format(query), pretty=1, count=100),
-                             headers={'User-Agent': output_info.user_agent}).json()
-            is_rate_limited(r)
+            while True:
+                r = requests.get("https://slack.com/api/search.messages",
+                                 params=dict(token=token, query="\"{}\"".format(query), pretty=1, count=100),
+                                 headers={'User-Agent': output_info.user_agent}).json()
+                if not is_rate_limited(r):
+                    break
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
@@ -343,11 +348,13 @@ def find_credentials(token, output_info: ScanningContext):
     try:
         r = None
         for query in CREDENTIALS_QUERIES:
-            params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100)
-            r = requests.get("https://slack.com/api/search.messages",
-                             params=params,
-                             headers={'User-Agent': output_info.user_agent}).json()
-            is_rate_limited(r)
+            while True:
+                params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100)
+                r = requests.get("https://slack.com/api/search.messages",
+                                 params=params,
+                                 headers={'User-Agent': output_info.user_agent}).json()
+                if not is_rate_limited(r):
+                    break
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
@@ -379,11 +386,13 @@ def find_aws_keys(token, output_info: ScanningContext):
     try:
         r = None
         for query in AWS_KEYS_QUERIES:
-            params = dict(token=token, query=query, pretty=1, count=100)
-            r = requests.get("https://slack.com/api/search.messages",
+            while True:
+                params = dict(token=token, query=query, pretty=1, count=100)
+                r = requests.get("https://slack.com/api/search.messages",
                              params=params,
                              headers={'User-Agent': output_info.user_agent}).json()
-            is_rate_limited(r)
+                if not is_rate_limited(r):
+                    break
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
@@ -419,11 +428,13 @@ def find_private_keys(token, output_info: ScanningContext):
     try:
         r = None
         for query in PRIVATE_KEYS_QUERIES:
-            params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100)
-            r = requests.get("https://slack.com/api/search.messages",
+            while True:
+                params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100)
+                r = requests.get("https://slack.com/api/search.messages",
                              params=params,
                              headers={'User-Agent': output_info.user_agent}).json()
-            is_rate_limited(r)
+                if not is_rate_limited(r):
+                    break
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
@@ -460,10 +471,12 @@ def find_interesting_links(token, output_info: ScanningContext):
     try:
         r = None
         for query in LINKS_QUERIES:
-            request_url = "https://slack.com/api/search.messages"
-            params = dict(token=token, query="has:link {}".format(query), pretty=1, count=100)
-            r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
-            is_rate_limited(r)
+            while True:
+                request_url = "https://slack.com/api/search.messages"
+                params = dict(token=token, query="has:link {}".format(query), pretty=1, count=100)
+                r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
+                if not is_rate_limited(r):
+                    break
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
@@ -501,10 +514,12 @@ def download_interesting_files(token, output_info: ScanningContext):
 
     try:
         for query in INTERESTING_FILE_QUERIES:
-            request_url = "https://slack.com/api/search.files"
-            params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100)
-            r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
-            is_rate_limited(r)
+            while True:
+                request_url = "https://slack.com/api/search.files"
+                params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100)
+                r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
+                if not is_rate_limited(r):
+                    break
             pagination[query] = (r['files']['pagination']['page_count'])
 
         for key, value in pagination.items():
@@ -593,7 +608,7 @@ if __name__ == '__main__':
     parser.add_argument('--no-file-download', dest='file_download', action='store_false',
                         help='disable downloading of files from the workspace')
     parser.add_argument('--version', action='version',
-                        version='SlackPirate.py v0.6. Developed by Mikail Tunç (@emtunc) with contributions from '
+                        version='SlackPirate.py v0.7. Developed by Mikail Tunç (@emtunc) with contributions from '
                                 'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
     """
     Even with "argument_default=None" in the constructor, all flags were False, so we explicitly set every flag to None
@@ -612,7 +627,7 @@ if __name__ == '__main__':
         print(termcolor.colored("You cannot use both --cookie and --token flags at the same time", "white", "on_red"))
         exit()
     elif args.cookie:  # Providing a cookie leads to a shorter execution path
-        display_cookie_tokens(cookie=dict(d=args.cookie), user_agent=selected_agent)
+        display_cookie_tokens(cookie=dict(d=args.cookie))
         exit()
     # Baseline behavior
     provided_token = args.token
