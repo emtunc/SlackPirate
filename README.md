@@ -1,5 +1,7 @@
 # SlackPirate - Slack Enumeration and Extraction Tool
 
+[![Build Status](https://travis-ci.com/emtunc/SlackPirate.svg?branch=master)](https://travis-ci.com/emtunc/SlackPirate)
+
 This is a tool developed in Python which uses the native Slack APIs to extract 'interesting' information from a Slack workspace given an access token.
 
 As of May 2018, Slack has over 8 million customers and that number is rapidly rising - the integration and 'ChatOps' possibilities are endless and allows teams (not just developers!) to create some really powerful workflows and Slack bot/application interactions.
@@ -51,9 +53,7 @@ Make a copy of that and pass that in to the script using the `--token` flag.
 
 ## Building
 
-The script was developed using Python 3.7 - a quick test on Python 2 presented some compatibility issues.
-
-Tested and working on Windows 10, Ubuntu 18.04 and the latest Kali build.
+The script has been developed, tested and confirmed working on Python 3.5, 3.6 and 3.7. A quick test on Python 2 presented some compatibility issues.
 
 #### Linux with virtualenv
 
