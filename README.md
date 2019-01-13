@@ -27,6 +27,7 @@ The tool uses the native Slack APIs to extract 'interesting' information and loo
 * Passwords
 * AWS Access/Secret keys
 * Private Keys
+* Pinned messages across all Channels
 * References to links and URLs that could provide further access to sensitive materials - think: Google Docs, Trello Invites, links to internal systems, etc
 * Files which could contain sensitive information such as .key, .sh, the words "password" or "secret" embedded in a document, etc
 
@@ -100,6 +101,7 @@ This will do the following:
     
 This will do the following:
 * Check Token validity and only continue if Slack returns `True`
+* Print to standard output if the token supplied has admin, owner or primary_owner privileges
 * Print to standard output if the tool found any @domains that can be used to register for the Slack Workspace (you may be surprised by what you find here - if you're lucky you'll find an old, unused, registerable domain here)
 * Dump team access logs in .json format if the token provided is a privileged token
 * Dump the user list in .json format
@@ -107,8 +109,17 @@ This will do the following:
 * Find references to passwords and other credentials
 * Find references to AWS keys
 * Find references to private keys
+* Find references to pinned messages across all Slack channels
 * Find references to interesting URLs and links
 * Lastly, the tool will attempt to download files based on pre-defined keywords
+
+```./SlackPirate.py --token <token> --s3-scan```
+    
+* This will instruct the tool to only run the S3 scan
+
+```./SlackPirate.py --token <token> --no-s3-scan```
+    
+* This will instruct the tool to run all scans apart from the S3 scan
 
 ## Screenshots
 
