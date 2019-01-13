@@ -89,6 +89,10 @@ The script has been developed, tested and confirmed working on Python 3.5, 3.6 a
 
 ## Usage
 
+ ```./SlackPirate.py --help```
+ 
+* Display the help menu - this includes information about all scan modules you can explicitly select or ignore
+
  ```./SlackPirate.py --cookie <cookie>```
  
 This will do the following:
