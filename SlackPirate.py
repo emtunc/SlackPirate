@@ -117,6 +117,7 @@ class ScanningContext:
     """
     Contains context data for performing scans and storing results.
     """
+
     def __init__(self, output_directory: str, slack_workspace: str, user_agent: str, user_id: str):
         self.output_directory = output_directory
         self.slack_workspace = slack_workspace
@@ -133,6 +134,7 @@ def is_rate_limited(slack_api_json_response):
     more lenient then what they have documented which is a good thing for us but meant that a proactive rate-limit
     would sleep prematurely)
     """
+
     if slack_api_json_response['ok'] is False and slack_api_json_response['error'] == 'ratelimited':
         print(termcolor.colored("INFO: Slack API rate limit hit - sleeping for 60 seconds", "white", "on_blue"))
         time.sleep(60)
@@ -149,6 +151,7 @@ def display_cookie_tokens(cookie):
     to write the tokens to a file... maybe, maybe not. Probably not ideal to commit a bunch of corporate
     tokens to long-term storage especially as they are valid pretty much forever. I'll leave as is for now...
     """
+
     try:
         r = requests.get("https://slackpirate-donotuse.slack.com", cookies=cookie)
         already_signed_in_match = re.findall(ALREADY_SIGNED_IN_TEAM_REGEX, str(r.content))
@@ -172,8 +175,8 @@ def check_token_validity(token, user_agent: str) -> ScanningContext:
     Use the Slack auth.test API to check whether the token is valid or not. If token is valid then create a
     directory for results to go in - easy peasy.
     """
-    result = None
 
+    result = None
     try:
         r = requests.post("https://slack.com/api/auth.test", params=dict(token=token, pretty=1),
                           headers={'Authorization': 'Bearer ' + token}).json()
@@ -461,17 +464,14 @@ def find_private_keys(token, output_info: ScanningContext):
     print(termcolor.colored("\n"))
 
 
-def find_pinned_messages(token, output_info: ScanningContext):
+def find_all_channels(token, output_info: ScanningContext):
     """
-    This function looks for pinned messages across all Slack channels the token has access to - including private
-    channels. We often find interesting information in pinned messages.
-    The function first calls the conversations.list API to grab all Slack channels from the Workspace. It then passes
-    the channel_id to pins.list which will either return pinned messages or not. If it does, dump to file :-)
+    Return a dictionary of the names and ids of all Slack channels that the token has access to.
+    This includes public and private channels.
     """
 
-    print(termcolor.colored("START: Attempting to find references to pinned messages", "white", "on_blue"))
-    pagination_cursor = ''
     channel_list = dict()
+    pagination_cursor = ''
     try:
         while True:
             r = requests.get("https://slack.com/api/conversations.list",
@@ -490,10 +490,23 @@ def find_pinned_messages(token, output_info: ScanningContext):
                              headers={'User-Agent': output_info.user_agent}).json()
             pagination_cursor = r['response_metadata']['next_cursor']
             for channel in r['channels']:
+                # Add the channel name as the key and id as the value in the dictionary.
                 channel_list[channel['name']] = channel['id']
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
+    return channel_list
 
+
+def find_pinned_messages(token, output_info: ScanningContext):
+    """
+    This function looks for pinned messages across all Slack channels the token has access to - including private
+    channels. We often find interesting information in pinned messages.
+    The function first calls the conversations.list API to grab all Slack channels from the Workspace. It then passes
+    the channel_id to pins.list which will either return pinned messages or not. If it does, dump to file :-)
+    """
+
+    print(termcolor.colored("START: Attempting to find references to pinned messages", "white", "on_blue"))
+    channel_list = find_all_channels(token, output_info)
     try:
         for channel_name, channel_id in channel_list.items():
             while True:
