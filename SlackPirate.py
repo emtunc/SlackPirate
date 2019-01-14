@@ -461,17 +461,14 @@ def find_private_keys(token, output_info: ScanningContext):
     print(termcolor.colored("\n"))
 
 
-def find_pinned_messages(token, output_info: ScanningContext):
+def find_all_channels(token, output_info: ScanningContext):
     """
-    This function looks for pinned messages across all Slack channels the token has access to - including private
-    channels. We often find interesting information in pinned messages.
-    The function first calls the conversations.list API to grab all Slack channels from the Workspace. It then passes
-    the channel_id to pins.list which will either return pinned messages or not. If it does, dump to file :-)
-    """
+    Return a dictionary of the names and ids of all Slack channels that the token has access to.
 
-    print(termcolor.colored("START: Attempting to find references to pinned messages", "white", "on_blue"))
-    pagination_cursor = ''
+    This includes all pricate channels.
+    """
     channel_list = dict()
+    pagination_cursor = ''
     try:
         while True:
             r = requests.get("https://slack.com/api/conversations.list",
@@ -490,10 +487,22 @@ def find_pinned_messages(token, output_info: ScanningContext):
                              headers={'User-Agent': output_info.user_agent}).json()
             pagination_cursor = r['response_metadata']['next_cursor']
             for channel in r['channels']:
+                # Add the channel name as the key and id as the value in the dictionary.
                 channel_list[channel['name']] = channel['id']
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
+    return channel_list
 
+def find_pinned_messages(token, output_info: ScanningContext):
+    """
+    This function looks for pinned messages across all Slack channels the token has access to - including private
+    channels. We often find interesting information in pinned messages.
+    The function first calls the conversations.list API to grab all Slack channels from the Workspace. It then passes
+    the channel_id to pins.list which will either return pinned messages or not. If it does, dump to file :-)
+    """
+
+    print(termcolor.colored("START: Attempting to find references to pinned messages", "white", "on_blue"))
+    channel_list = find_all_channels(token, output_info)
     try:
         for channel_name, channel_id in channel_list.items():
             while True:
