@@ -19,8 +19,9 @@ MAX_RETRIEVAL_COUNT = 900
 FILE_USER_LIST = "user-list.json"
 FILE_ACCESS_LOGS = "access-logs.json"
 FILE_S3 = "S3.txt"
-FILE_CREDENTIALS = "Passwords.txt"
+FILE_CREDENTIALS = "passwords.txt"
 FILE_AWS_KEYS = "aws-keys.txt"
+FILE_PINNED_MESSAGES = "pinned-messages.txt"
 FILE_PRIVATE_KEYS = "private-keys.txt"
 FILE_LINKS = "URLs.txt"
 
@@ -58,6 +59,7 @@ LINKS_QUERIES = ["amazonaws",
                  "kubernetes",
                  "sharepoint",
                  "staging",
+                 "swagger",
                  "travis",
                  "trello"]
 # Regex constants with explanatory links
@@ -459,6 +461,62 @@ def find_private_keys(token, output_info: ScanningContext):
     print(termcolor.colored("\n"))
 
 
+def find_pinned_messages(token, output_info: ScanningContext):
+    """
+    This function looks for pinned messages across all Slack channels the token has access to - including private
+    channels. We often find interesting information in pinned messages.
+    The function first calls the conversations.list API to grab all Slack channels from the Workspace. It then passes
+    the channel_id to pins.list which will either return pinned messages or not. If it does, dump to file :-)
+    """
+
+    print(termcolor.colored("START: Attempting to find references to pinned messages", "white", "on_blue"))
+    pagination_cursor = ''
+    channel_list = dict()
+    try:
+        while True:
+            r = requests.get("https://slack.com/api/conversations.list",
+                             params=dict(token=token,
+                                         pretty=1, limit=1, cursor=pagination_cursor,
+                                         types='public_channel,private_channel'),
+                             headers={'User-Agent': output_info.user_agent}).json()
+            if not is_rate_limited(r):
+                pagination_cursor = r['response_metadata']['next_cursor']
+                break
+        while str(r['ok']) and pagination_cursor:
+            r = requests.get("https://slack.com/api/conversations.list",
+                             params=dict(token=token,
+                                         pretty=1, limit=MAX_RETRIEVAL_COUNT, cursor=pagination_cursor,
+                                         types='public_channel,private_channel'),
+                             headers={'User-Agent': output_info.user_agent}).json()
+            pagination_cursor = r['response_metadata']['next_cursor']
+            for channel in r['channels']:
+                channel_list[channel['name']] = channel['id']
+    except requests.exceptions.RequestException as exception:
+        print(termcolor.colored(exception, "white", "on_red"))
+
+    try:
+        for channel_name, channel_id in channel_list.items():
+            while True:
+                r = requests.get("https://slack.com/api/pins.list",
+                                 params=dict(token=token, pretty=1, channel=channel_id),
+                                 headers={'User-Agent': output_info.user_agent}).json()
+                if not is_rate_limited(r):
+                    if r['items']:
+                        for pinned_message in r['items']:
+                            if pinned_message['type'] == 'message':
+                                with open(output_info.output_directory + '/' + FILE_PINNED_MESSAGES, 'a',
+                                          encoding="utf-8") as log_output:
+                                    log_output.write(channel_name + "," + pinned_message['message']['text'] + "\n")
+                    break
+    except requests.exceptions.RequestException as exception:
+        print(termcolor.colored(exception, "white", "on_red"))
+
+    print(termcolor.colored(
+        "END: If any pinned messages were found, they will be here: ./" + output_info.output_directory +
+        "/" + FILE_PINNED_MESSAGES, "white", "on_green"))
+    print(termcolor.colored("\n"))
+
+
 def find_interesting_links(token, output_info: ScanningContext):
     """
     Does a search for URI/URLs by searching for keywords such as 'amazonaws', 'jenkins', etc.
@@ -587,14 +645,18 @@ if __name__ == '__main__':
                         help='enable searching for s3 references in messages')
     parser.add_argument('--no-s3-scan', dest='s3_scan', action='store_false',
                         help='disable searching for s3 references in messages')
+    parser.add_argument('--pinned-message-scan', dest='pinned_message_scan', action='store_true',
+                        help='enable searching of pinned messages across all channels')
+    parser.add_argument('--no-pinned-message-scan', dest='pinned_message_scan', action='store_false',
+                        help='disable searching of pinned messages across all channels')
     parser.add_argument('--credential-scan', dest='credential_scan', action='store_true',
                         help='enable searching for messages referencing credentials')
     parser.add_argument('--no-credential-scan', dest='credential_scan', action='store_false',
                         help='disable searching for messages referencing credentials')
     parser.add_argument('--aws-key-scan', dest='aws_key_scan', action='store_true',
-                        help='enable searching for aws keys in messages')
+                        help='enable searching for AWS keys in messages')
     parser.add_argument('--no-aws-key-scan', dest='aws_key_scan', action='store_false',
-                        help='disable searching for aws keys in messages')
+                        help='disable searching for AWS keys in messages')
     parser.add_argument('--private-key-scan', dest='private_key_scan', action='store_true',
                         help='enable search for private keys in messages')
     parser.add_argument('--no-private-key-scan', dest='private_key_scan', action='store_false',
@@ -604,18 +666,18 @@ if __name__ == '__main__':
     parser.add_argument('--no-link-scan', dest='link_scan', action='store_false',
                         help='disable searching for interesting links')
     parser.add_argument('--file-download', dest='file_download', action='store_true',
-                        help='enable downloading of files from the workspace')
+                        help='enable downloading of files from the Workspace')
     parser.add_argument('--no-file-download', dest='file_download', action='store_false',
-                        help='disable downloading of files from the workspace')
+                        help='disable downloading of files from the Workspace')
     parser.add_argument('--version', action='version',
-                        version='SlackPirate.py v0.7. Developed by Mikail Tunç (@emtunc) with contributions from '
+                        version='SlackPirate.py v0.8. Developed by Mikail Tunç (@emtunc) with contributions from '
                                 'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
     """
     Even with "argument_default=None" in the constructor, all flags were False, so we explicitly set every flag to None
     This is necessary, because we want to differentiate between "all False" and "any False"
     """
     parser.set_defaults(team_access_logs=None, user_list=None, s3_scan=None, credential_scan=None, aws_key_scan=None,
-                        private_key_scan=None, link_scan=None, file_download=None)
+                        private_key_scan=None, link_scan=None, file_download=None, pinned_message_scan=None)
     args = parser.parse_args()
 
     selected_agent = getUserAgent()
@@ -643,6 +705,7 @@ if __name__ == '__main__':
         ('credential_scan', find_credentials),
         ('aws_key_scan', find_aws_keys),
         ('private_key_scan', find_private_keys),
+        ('pinned_message_scan', find_pinned_messages),
         ('link_scan', find_interesting_links),
         ('file_download', download_interesting_files),
     ]
