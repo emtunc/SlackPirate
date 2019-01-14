@@ -117,6 +117,7 @@ class ScanningContext:
     """
     Contains context data for performing scans and storing results.
     """
+
     def __init__(self, output_directory: str, slack_workspace: str, user_agent: str, user_id: str):
         self.output_directory = output_directory
         self.slack_workspace = slack_workspace
@@ -133,6 +134,7 @@ def is_rate_limited(slack_api_json_response):
     more lenient then what they have documented which is a good thing for us but meant that a proactive rate-limit
     would sleep prematurely)
     """
+
     if slack_api_json_response['ok'] is False and slack_api_json_response['error'] == 'ratelimited':
         print(termcolor.colored("INFO: Slack API rate limit hit - sleeping for 60 seconds", "white", "on_blue"))
         time.sleep(60)
@@ -149,6 +151,7 @@ def display_cookie_tokens(cookie):
     to write the tokens to a file... maybe, maybe not. Probably not ideal to commit a bunch of corporate
     tokens to long-term storage especially as they are valid pretty much forever. I'll leave as is for now...
     """
+
     try:
         r = requests.get("https://slackpirate-donotuse.slack.com", cookies=cookie)
         already_signed_in_match = re.findall(ALREADY_SIGNED_IN_TEAM_REGEX, str(r.content))
@@ -172,8 +175,8 @@ def check_token_validity(token, user_agent: str) -> ScanningContext:
     Use the Slack auth.test API to check whether the token is valid or not. If token is valid then create a
     directory for results to go in - easy peasy.
     """
-    result = None
 
+    result = None
     try:
         r = requests.post("https://slack.com/api/auth.test", params=dict(token=token, pretty=1),
                           headers={'Authorization': 'Bearer ' + token}).json()
@@ -464,9 +467,9 @@ def find_private_keys(token, output_info: ScanningContext):
 def find_all_channels(token, output_info: ScanningContext):
     """
     Return a dictionary of the names and ids of all Slack channels that the token has access to.
-
-    This includes all private channels.
+    This includes public and private channels.
     """
+
     channel_list = dict()
     pagination_cursor = ''
     try:
@@ -492,6 +495,7 @@ def find_all_channels(token, output_info: ScanningContext):
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
     return channel_list
+
 
 def find_pinned_messages(token, output_info: ScanningContext):
     """
