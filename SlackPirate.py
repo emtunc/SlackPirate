@@ -465,7 +465,7 @@ def find_all_channels(token, output_info: ScanningContext):
     """
     Return a dictionary of the names and ids of all Slack channels that the token has access to.
 
-    This includes all pricate channels.
+    This includes all private channels.
     """
     channel_list = dict()
     pagination_cursor = ''
