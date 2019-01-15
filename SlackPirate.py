@@ -141,7 +141,7 @@ def is_rate_limited(slack_api_json_response):
         return False
 
 
-def display_cookie_tokens(cookie):
+def display_cookie_tokens(cookie, user_agent):
     """
     If the --cookie flag is set then the tool connect to a Slack Workspace that you won't be a member of (like mine)
     then RegEx out the Workspaces you're logged in to. It will then connect to each one of those Workspaces then
@@ -153,13 +153,12 @@ def display_cookie_tokens(cookie):
         r = requests.get("https://slackpirate-donotuse.slack.com", cookies=cookie)
         already_signed_in_match = re.findall(ALREADY_SIGNED_IN_TEAM_REGEX, str(r.content))
         if already_signed_in_match:
-            selected_agent = getUserAgent()
             print(termcolor.colored("This cookie has access to the following Workspaces: \n", "white", "on_blue"))
             for workspace in already_signed_in_match:
                 r = requests.get(workspace, cookies=cookie)
                 regex_tokens = re.findall(SLACK_API_TOKEN_REGEX, str(r.content))
                 for slack_token in regex_tokens:
-                    collected_output_info = init_scanning_context(token=slack_token, user_agent=selected_agent)
+                    collected_output_info = init_scanning_context(token=slack_token, user_agent=user_agent)
                     if check_if_admin_token(token=slack_token, output_info=collected_output_info):
                         print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (admin token!)', "white", "on_magenta"))
                     else:
@@ -704,7 +703,7 @@ if __name__ == '__main__':
         print(termcolor.colored("You cannot use both --cookie and --token flags at the same time", "white", "on_red"))
         exit()
     elif args.cookie:  # Providing a cookie leads to a shorter execution path
-        display_cookie_tokens(cookie=dict(d=args.cookie))
+        display_cookie_tokens(cookie=dict(d=args.cookie), user_agent=selected_agent)
         exit()
     # Baseline behavior
     provided_token = args.token
