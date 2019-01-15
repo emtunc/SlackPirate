@@ -178,38 +178,36 @@ def init_scanning_context(token, user_agent: str) -> ScanningContext:
     result = None
 
     try:
-        r = requests.post("https://slack.com/api/auth.test", params=dict(token=token, pretty=1),
-                          headers={'Authorization': 'Bearer ' + token}).json()
+        r = requests.post("https://slack.com/api/auth.test", params=dict(pretty=1),
+                          headers={'Authorization': 'Bearer ' + token, 'User-Agent': user_agent}).json()
         if str(r['ok']) == 'True':
             result = ScanningContext(output_directory=str(r['team']) + '_' + time.strftime("%Y%m%d-%H%M%S"),
                                      slack_workspace=str(r['url']), user_id=str(r['user_id']), user_agent=user_agent)
         else:
+            print(termcolor.colored("ERR: Token not valid. Slack error: " + str(r['error']), "white", "on_red"))
             exit()
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
     return result
 
 
-def check_token_validity(token):
+def check_token_validity(token, user_agent: str):
     """
     Use the Slack auth.test API to check whether the token is valid or not.
     """
 
     try:
         r = requests.post("https://slack.com/api/auth.test", params=dict(token=token, pretty=1),
-                          headers={'Authorization': 'Bearer ' + token}).json()
+                          headers={'Authorization': 'Bearer ' + token, 'User-Agent': user_agent}).json()
         if str(r['ok']) == 'True':
             print(termcolor.colored("INFO: Token looks valid! URL: " + str(r['url']) + " User: " + str(r['user']),
                                     "white", "on_blue"))
             print(termcolor.colored("\n"))
         else:
             print(termcolor.colored("ERR: Token not valid. Slack error: " + str(r['error']), "white", "on_red"))
-            print(termcolor.colored("You can get a token here: https://api.slack.com/custom-integrations/legacy-tokens",
-                                    "white", "on_red"))
             exit()
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
-
 
 
 def check_if_admin_token(token, output_info: ScanningContext):
@@ -219,7 +217,7 @@ def check_if_admin_token(token, output_info: ScanningContext):
 
     try:
         r = requests.get("https://slack.com/api/users.info", params=dict(
-            token=token, pretty=1, user=output_info.user_id, headers={'User-Agent': output_info.user_agent})).json()
+            token=token, pretty=1, user=output_info.user_id), headers={'User-Agent': output_info.user_agent}).json()
         return r['user']['is_admin'] or r['user']['is_owner'] or r['user']['is_primary_owner']
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
@@ -709,7 +707,7 @@ if __name__ == '__main__':
     provided_token = args.token
     collected_output_info = init_scanning_context(token=provided_token, user_agent=selected_agent)
     pathlib.Path(collected_output_info.output_directory).mkdir(parents=True, exist_ok=True)
-    check_token_validity(token=provided_token)
+    check_token_validity(token=provided_token, user_agent=selected_agent)
     if check_if_admin_token(token=provided_token, output_info=collected_output_info):
         print(termcolor.colored("BINGO: You seem to be in possession of an admin token!", "white", "on_magenta"))
         print(termcolor.colored("\n"))
