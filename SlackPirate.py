@@ -17,7 +17,7 @@ from constants import getUserAgent
 #############
 # Constants #
 #############
-POLL_TIMEOUT = 500  # Milliseconds to wait on a retrieval to finish
+POLL_TIMEOUT = 0.5  # Seconds to wait on a retrieval to finish
 # Query params
 MAX_RETRIEVAL_COUNT = 900
 # Output file names
@@ -578,17 +578,12 @@ def find_interesting_links(token, scan_context: ScanningContext):
 def download_interesting_files(token, scan_context: ScanningContext):
     """
     Downloads files which may be interesting to an attacker. Searches for certain keywords then downloads.
-    bad_characters
     """
 
-    print(termcolor.colored("START: Attempting to download interesting files (this may take some time)", "white",
-                            "on_blue"))
-    pathlib.Path(scan_context.output_directory + '/downloads').mkdir(parents=True, exist_ok=True)
-    # strips out characters which, though accepted in Slack, aren't accepted in Windows
-    bad_chars_re = re.compile('[/:*?"<>|\\\]')  # Windows doesn't like "/ \ : * ? < > " or |
-    page_counts_by_query = dict()
-
+    print(termcolor.colored("START: Attempting to locate and download interesting files (this may take some time)",
+                            "white","on_blue"))
     download_directory = scan_context.output_directory + '/downloads'
+    pathlib.Path(download_directory).mkdir(parents=True, exist_ok=True)
 
     completed_file_names = Queue()
     file_requests = []
@@ -605,52 +600,64 @@ def download_interesting_files(token, scan_context: ScanningContext):
             msg = "Problem downloading [{}] from [{}]: {}".format(output_filename, url, ex)
             print(termcolor.colored(msg, 'white', 'on_red'))
 
+    # strips out characters which, though accepted in Slack, aren't accepted in Windows
+    bad_chars_re = re.compile('[/:*?"<>|\\\]')  # Windows doesn't like "/ \ : * ? < > " or |
+    page_counts_by_query = dict()  # Accumulates the number of pages of results for each query
     try:
+        query_header = {'User-Agent': scan_context.user_agent}
         for query in INTERESTING_FILE_QUERIES:
             while True:
                 request_url = "https://slack.com/api/search.files"
                 params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100)
-                r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
-                if not sleep_if_rate_limited(r):
+                response_json = requests.get(request_url, params=params, headers=query_header).json()
+                if not sleep_if_rate_limited(response_json):
                     break
-            page_counts_by_query[query] = (r['files']['pagination']['page_count'])
+            page_counts_by_query[query] = response_json['files']['pagination']['page_count']
 
         for query, page_count in page_counts_by_query.items():
             page = 1
             while page <= page_count:
                 request_url = "https://slack.com/api/search.files"
                 params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100, page=str(page))
-                r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
-                sleep_if_rate_limited(r)
-                for file in r['files']['matches']:
+                response_json = requests.get(request_url, params=params, headers=query_header).json()
+                sleep_if_rate_limited(response_json)
+                for file in response_json['files']['matches']:
                     file_name = file['name']
                     safe_filename = bad_chars_re.sub('_', file_name)  # use underscores to replace tricky characters
                     file_dl_args = (file['url_private'], safe_filename, completed_file_names)
                     file_requests.append(Process(target=_download_file, args=file_dl_args))
                 page += 1
-        # Now actually fire the requests
+
+        # Now actually start the requests
+        if file_requests:
+            print(termcolor.colored("Retrieving {} files...".format(len(file_requests)), "white", "on_blue"))
         for request in file_requests:
             request.start()
         # Wait for all requests to complete
-        # For each request, if it is still alive quickly check for completion.
-        for request in file_requests:
-            while request.is_alive():
-                request.join(timeout=1)
-                while True:
-                    try:
-                        response_message = completed_file_names.get(block=False)
-                        print(termcolor.colored(response_message, "white", "on_green"))
-                        break
-                    except queue.Empty:
-                        # This is expected if nothing completed since the last check
-                        break
+        requests_incomplete = len(file_requests) > 0
+        while requests_incomplete:
+            try:
+                response_message = completed_file_names.get(timeout=POLL_TIMEOUT)
+                print(termcolor.colored(response_message, "white", "on_green"))
+            except queue.Empty:
+                # This is expected if nothing completed since the last check
+                pass
+            requests_incomplete = any(request for request in file_requests if request.is_alive())
+
+        while not completed_file_names.empty():  # Print out any final results
+            print(termcolor.colored(completed_file_names.get_nowait(), "white", "on_green"))
 
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
 
-    print(termcolor.colored("END: Downloaded files (if any were found) will be found in: "
-                            "./{}/downloads".format(scan_context.output_directory), "white", "on_green"))
-    print(termcolor.colored("\n"))
+    if file_requests:
+        print(termcolor.colored(
+            "END: Downloaded {} files to: ./{}/downloads".format(len(file_requests), scan_context.output_directory),
+            "white", "on_blue"))
+    else:
+        print(termcolor.colored("END: No interesting files discovered.", "white", "on_blue"))
+        print('\n')
+
 
 
 def file_cleanup(input_file, scan_context: ScanningContext):
