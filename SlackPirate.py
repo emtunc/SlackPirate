@@ -161,7 +161,7 @@ def display_cookie_tokens(cookie):
                 for slack_token in regex_tokens:
                     collected_output_info = init_scanning_context(token=slack_token, user_agent=selected_agent)
                     if check_if_admin_token(token=slack_token, output_info=collected_output_info):
-                        print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (admin token!)', "white", "on_green"))
+                        print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (admin token!)', "white", "on_magenta"))
                     else:
                         print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (not admin)', "white", "on_green"))
         else:
