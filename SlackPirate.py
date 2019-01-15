@@ -585,7 +585,7 @@ def download_interesting_files(token, scan_context: ScanningContext):
                             "on_blue"))
     pathlib.Path(scan_context.output_directory + '/downloads').mkdir(parents=True, exist_ok=True)
     # strips out characters which, though accepted in Slack, aren't accepted in Windows
-    bad_chars_re = re.compile('[/:*?"<>|\\\]') # Windows doesn't like "/ \ : * ? < > " or |
+    bad_chars_re = re.compile('[/:*?"<>|\\\]')  # Windows doesn't like "/ \ : * ? < > " or |
     page_counts_by_query = dict()
 
     download_directory = scan_context.output_directory + '/downloads'
@@ -594,17 +594,15 @@ def download_interesting_files(token, scan_context: ScanningContext):
     file_requests = []
 
     def _download_file(url: str, output_filename: str, q: Queue):
-        """Private helper to retrieve files in parallel"""
+        """Private helper to retrieve and write a file from a URL"""
         try:
-            response = requests.get(url, headers={'Authorization': 'Bearer ' + token,
-                                                           'User-Agent': scan_context.user_agent})
+            headers = {'Authorization': 'Bearer ' + token, 'User-Agent': scan_context.user_agent}
+            response = requests.get(url, headers=headers)
 
             open("{}/{}".format(download_directory, output_filename), 'wb').write(response.content)
             q.put("Completed downloading [{}] from [{}].".format(output_filename, url))
         except requests.exceptions.RequestException as ex:
-            msg = "Problem downloading [{}] from [{}]: {}".format(
-                output_filename, url, ex
-            )
+            msg = "Problem downloading [{}] from [{}]: {}".format(output_filename, url, ex)
             print(termcolor.colored(msg, 'white', 'on_red'))
 
     try:
@@ -644,6 +642,7 @@ def download_interesting_files(token, scan_context: ScanningContext):
                         print(termcolor.colored(response_message, "white", "on_green"))
                         break
                     except queue.Empty:
+                        # This is expected if nothing completed since the last check
                         break
 
     except requests.exceptions.RequestException as exception:
