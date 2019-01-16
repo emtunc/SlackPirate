@@ -501,10 +501,11 @@ def find_all_channels(token, output_info: ScanningContext):
 def _write_messages(file_path: str, contents: List[str]):
     """Helper function to write message content to the specified file"""
     if contents:
-        print(termcolor.colored("INFO: Writing {} pinned messages".format(len(contents))))
+        print(termcolor.colored("INFO: Writing {} pinned messages".format(len(contents)), "white", "on_blue"))
         with open(file_path, 'a', encoding="utf-8") as out:
             for text_content in contents:
                 out.write(text_content)
+
 
 def find_pinned_messages(token, output_info: ScanningContext):
     """
