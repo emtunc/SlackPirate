@@ -166,8 +166,8 @@ def display_cookie_tokens(cookie, user_agent):
                 r = requests.get(workspace, cookies=cookie)
                 regex_tokens = re.findall(SLACK_API_TOKEN_REGEX, str(r.content))
                 for slack_token in regex_tokens:
-                    collected_output_info = init_scanning_context(token=slack_token, user_agent=user_agent)
-                    if check_if_admin_token(token=slack_token, output_info=collected_output_info):
+                    collected_scan_context = init_scanning_context(token=slack_token, user_agent=user_agent)
+                    if check_if_admin_token(token=slack_token, scan_context=collected_scan_context):
                         print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (admin token!)', "white", "on_magenta"))
                     else:
                         print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (not admin)', "white", "on_green"))
@@ -225,7 +225,7 @@ def check_if_admin_token(token, scan_context: ScanningContext):
 
     try:
         r = requests.get("https://slack.com/api/users.info", params=dict(
-            token=token, pretty=1, user=output_info.user_id), headers={'User-Agent': output_info.user_agent}).json()
+            token=token, pretty=1, user=scan_context.user_id), headers={'User-Agent': scan_context.user_agent}).json()
         return r['user']['is_admin'] or r['user']['is_owner'] or r['user']['is_primary_owner']
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
@@ -765,13 +765,13 @@ if __name__ == '__main__':
         exit()
     # Baseline behavior
     provided_token = args.token
-    collected_output_info = init_scanning_context(token=provided_token, user_agent=selected_agent)
-    pathlib.Path(collected_output_info.output_directory).mkdir(parents=True, exist_ok=True)
+    collected_scan_context = init_scanning_context(token=provided_token, user_agent=selected_agent)
+    pathlib.Path(collected_scan_context.output_directory).mkdir(parents=True, exist_ok=True)
     check_token_validity(token=provided_token, user_agent=selected_agent)
-    if check_if_admin_token(token=provided_token, output_info=collected_output_info):
+    if check_if_admin_token(token=provided_token, scan_context=collected_scan_context):
         print(termcolor.colored("BINGO: You seem to be in possession of an admin token!", "white", "on_magenta"))
         print(termcolor.colored("\n"))
-    print_interesting_information(output_info=collected_output_info)
+    print_interesting_information(scan_context=collected_scan_context)
 
     # Possible scans to run along with their flags
     flags_and_scans = [
