@@ -10,6 +10,7 @@ import requests
 import termcolor
 import queue
 
+from typing import List
 from multiprocessing import Process, Queue
 from constants import getUserAgent
 
@@ -18,6 +19,7 @@ from constants import getUserAgent
 # Constants #
 #############
 POLL_TIMEOUT = 0.5  # Seconds to wait on a retrieval to finish
+DOWNLOAD_BATCH_SIZE = 25  # Pull up to this many files at once
 # Query params
 MAX_RETRIEVAL_COUNT = 900
 # Output file names
@@ -587,6 +589,21 @@ def find_interesting_links(token, scan_context: ScanningContext):
     print(termcolor.colored("\n"))
 
 
+def _retrieve_file_batch(file_requests: List[Process], completed_file_names: Queue):
+    for request in file_requests:
+        request.start()
+    # Wait for all requests to complete
+    requests_incomplete = len(file_requests) > 0
+    while requests_incomplete:
+        try:
+            response_message = completed_file_names.get(timeout=POLL_TIMEOUT)
+            print(response_message)
+        except queue.Empty:
+            # This is expected if nothing completed since the last check
+            pass
+        requests_incomplete = any(request for request in file_requests if request.is_alive())
+
+
 def _download_file(url: str, output_filename: str, token: str, user_agent: str, download_directory: str, q: Queue):
     """Private helper to retrieve and write a file from a URL"""
     try:
@@ -646,18 +663,10 @@ def download_interesting_files(token, scan_context: ScanningContext):
         # Now actually start the requests
         if file_requests:
             print(termcolor.colored("Retrieving {} files...".format(len(file_requests)), "white", "on_blue"))
-        for request in file_requests:
-            request.start()
-        # Wait for all requests to complete
-        requests_incomplete = len(file_requests) > 0
-        while requests_incomplete:
-            try:
-                response_message = completed_file_names.get(timeout=POLL_TIMEOUT)
-                print(response_message)
-            except queue.Empty:
-                # This is expected if nothing completed since the last check
-                pass
-            requests_incomplete = any(request for request in file_requests if request.is_alive())
+            file_batches = (file_requests[i:i+DOWNLOAD_BATCH_SIZE]
+                            for i in range(0, len(file_requests), DOWNLOAD_BATCH_SIZE))
+            for batch in file_batches:
+                _retrieve_file_batch(batch, completed_file_names)
 
         while not completed_file_names.empty():  # Print out any final results
             print(termcolor.colored(completed_file_names.get_nowait(), "white", "on_green"))
