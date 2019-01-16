@@ -8,6 +8,7 @@ import time
 import colorama
 import requests
 import termcolor
+from typing import List
 from constants import getUserAgent
 
 #############
@@ -509,6 +510,15 @@ def find_all_channels(token, output_info: ScanningContext):
     return channel_list
 
 
+def _write_messages(file_path: str, contents: List[str]):
+    """Helper function to write message content to the specified file"""
+    if contents:
+        print(termcolor.colored("INFO: Writing {} pinned messages".format(len(contents)), "white", "on_blue"))
+        with open(file_path, 'a', encoding="utf-8") as out:
+            for text_content in contents:
+                out.write(text_content)
+
+
 def find_pinned_messages(token, output_info: ScanningContext):
     """
     This function looks for pinned messages across all Slack channels the token has access to - including private
@@ -519,26 +529,40 @@ def find_pinned_messages(token, output_info: ScanningContext):
 
     print(termcolor.colored("START: Attempting to find references to pinned messages", "white", "on_blue"))
     channel_list = find_all_channels(token, output_info)
+    output_file = "{}/{}".format(output_info.output_directory, FILE_PINNED_MESSAGES)
+
+    total_pinned_messages = 0
+    pinned_message_contents = []
+    request_header = {'User-Agent': output_info.user_agent}
+
     try:
         for channel_name, channel_id in channel_list.items():
             while True:
-                r = requests.get("https://slack.com/api/pins.list",
-                                 params=dict(token=token, pretty=1, channel=channel_id),
-                                 headers={'User-Agent': output_info.user_agent}).json()
-                if not is_rate_limited(r):
-                    if r['items']:
-                        for pinned_message in r['items']:
-                            if pinned_message['type'] == 'message':
-                                with open(output_info.output_directory + '/' + FILE_PINNED_MESSAGES, 'a',
-                                          encoding="utf-8") as log_output:
-                                    log_output.write(channel_name + "," + pinned_message['message']['text'] + "\n")
-                    break
+                params = dict(token=token, pretty=1, channel=channel_id)
+                r = requests.get("https://slack.com/api/pins.list", params=params, headers=request_header).json()
+                if is_rate_limited(r):
+                    # Write what's been accumulated so far
+                    _write_messages(file_path=output_file, contents=pinned_message_contents)
+                    # Clear the accumulator
+                    pinned_message_contents = []
+                    continue
+
+                channel_pinned_messages = [
+                    "Channel [{}]: {}\n".format(channel_name, m.get('message', dict()).get('text'))
+                    for m in r.get('items', []) if m.get('type') == 'message']
+                pinned_message_contents += channel_pinned_messages
+                total_pinned_messages += len(channel_pinned_messages)
+                break
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
 
-    print(termcolor.colored(
-        "END: If any pinned messages were found, they will be here: ./" + output_info.output_directory +
-        "/" + FILE_PINNED_MESSAGES, "white", "on_green"))
+    if total_pinned_messages > 0:
+        _write_messages(file_path=output_file, contents=pinned_message_contents)
+        print(termcolor.colored(
+            "END: Wrote {} pinned messages to: ./{}".format(total_pinned_messages, output_file),
+            "white", "on_green"))
+    else:
+        print(termcolor.colored("END: No pinned messages were found.", "white", "on_green"))
     print(termcolor.colored("\n"))
 
 
