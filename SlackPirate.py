@@ -575,6 +575,20 @@ def find_interesting_links(token, scan_context: ScanningContext):
     print(termcolor.colored("\n"))
 
 
+def _download_file(url: str, output_filename: str, token: str, user_agent: str, download_directory: str, q: Queue):
+    """Private helper to retrieve and write a file from a URL"""
+    try:
+        headers = {'Authorization': 'Bearer ' + token, 'User-Agent': user_agent}
+        response = requests.get(url, headers=headers)
+
+        open("{}/{}".format(download_directory, output_filename), 'wb').write(response.content)
+        completion_message = "Completed downloading [{}] from [{}].".format(output_filename, url)
+        q.put(termcolor.colored(completion_message, "white", "on_green"))
+    except requests.exceptions.RequestException as ex:
+        error_msg = "Problem downloading [{}] from [{}]: {}".format(output_filename, url, ex)
+        q.put(termcolor.colored(error_msg, 'white', 'on_red'))
+
+
 def download_interesting_files(token, scan_context: ScanningContext):
     """
     Downloads files which may be interesting to an attacker. Searches for certain keywords then downloads.
@@ -588,21 +602,10 @@ def download_interesting_files(token, scan_context: ScanningContext):
     completed_file_names = Queue()
     file_requests = []
 
-    def _download_file(url: str, output_filename: str, q: Queue):
-        """Private helper to retrieve and write a file from a URL"""
-        try:
-            headers = {'Authorization': 'Bearer ' + token, 'User-Agent': scan_context.user_agent}
-            response = requests.get(url, headers=headers)
-
-            open("{}/{}".format(download_directory, output_filename), 'wb').write(response.content)
-            q.put("Completed downloading [{}] from [{}].".format(output_filename, url))
-        except requests.exceptions.RequestException as ex:
-            msg = "Problem downloading [{}] from [{}]: {}".format(output_filename, url, ex)
-            print(termcolor.colored(msg, 'white', 'on_red'))
-
     # strips out characters which, though accepted in Slack, aren't accepted in Windows
     bad_chars_re = re.compile('[/:*?"<>|\\\]')  # Windows doesn't like "/ \ : * ? < > " or |
     page_counts_by_query = dict()  # Accumulates the number of pages of results for each query
+    common_file_dl_params = (token, scan_context.user_agent, download_directory, completed_file_names)
     try:
         query_header = {'User-Agent': scan_context.user_agent}
         for query in INTERESTING_FILE_QUERIES:
@@ -624,7 +627,7 @@ def download_interesting_files(token, scan_context: ScanningContext):
                 for file in response_json['files']['matches']:
                     file_name = file['name']
                     safe_filename = bad_chars_re.sub('_', file_name)  # use underscores to replace tricky characters
-                    file_dl_args = (file['url_private'], safe_filename, completed_file_names)
+                    file_dl_args = (file['url_private'], safe_filename) + common_file_dl_params
                     file_requests.append(Process(target=_download_file, args=file_dl_args))
                 page += 1
 
@@ -638,7 +641,7 @@ def download_interesting_files(token, scan_context: ScanningContext):
         while requests_incomplete:
             try:
                 response_message = completed_file_names.get(timeout=POLL_TIMEOUT)
-                print(termcolor.colored(response_message, "white", "on_green"))
+                print(response_message)
             except queue.Empty:
                 # This is expected if nothing completed since the last check
                 pass
