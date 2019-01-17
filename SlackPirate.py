@@ -677,18 +677,19 @@ def download_interesting_files(token, scan_context: ScanningContext):
                 params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100, page=str(page))
                 response_json = requests.get(request_url, params=params, headers=query_header).json()
                 sleep_if_rate_limited(response_json)
-                for file in response_json['files']['matches']:
-                    if file['id'] not in unique_file_id:
-                        unique_file_id.add(file['id'])
-                        file_name = file['id'] + "-" + file['name']
-                        safe_filename = bad_chars_re.sub('_', file_name)  # use underscores to replace tricky characters
-                        file_dl_args = (file['url_private'], safe_filename) + common_file_dl_params
-                        file_requests.append(Process(target=_download_file, args=file_dl_args))
+                new_files = [new_file for new_file in response_json['files']['matches'] if
+                             new_file['id'] not in unique_file_id]
+                for new_file in new_files:
+                    unique_file_id.add(new_file['id'])
+                    file_name = new_file['id'] + "-" + new_file['name']
+                    safe_filename = bad_chars_re.sub('_', file_name)  # use underscores to replace tricky characters
+                    file_dl_args = (new_file['url_private'], safe_filename) + common_file_dl_params
+                    file_requests.append(Process(target=_download_file, args=file_dl_args))
                 page += 1
 
         # Now actually start the requests
         if file_requests:
-            print(termcolor.colored("Retrieving {} files...".format(len(file_requests)), "white", "on_blue"))
+            print(termcolor.colored("INFO: Retrieving {} files...".format(len(file_requests)), "white", "on_blue"))
             file_batches = (file_requests[i:i+DOWNLOAD_BATCH_SIZE]
                             for i in range(0, len(file_requests), DOWNLOAD_BATCH_SIZE))
             for batch in file_batches:
@@ -776,7 +777,7 @@ if __name__ == '__main__':
     parser.add_argument('--no-file-download', dest='file_download', action='store_false',
                         help='disable downloading of files from the Workspace')
     parser.add_argument('--version', action='version',
-                        version='SlackPirate.py v0.9. Developed by Mikail Tunç (@emtunc) with contributions from '
+                        version='SlackPirate.py v0.10. Developed by Mikail Tunç (@emtunc) with contributions from '
                                 'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
     """
     Even with "argument_default=None" in the constructor, all flags were False, so we explicitly set every flag to None
