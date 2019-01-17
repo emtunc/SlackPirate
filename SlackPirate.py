@@ -616,7 +616,7 @@ def _download_file(url: str, output_filename: str, token: str, user_agent: str, 
         response = requests.get(url, headers=headers)
 
         open("{}/{}".format(download_directory, output_filename), 'wb').write(response.content)
-        completion_message = "Completed downloading [{}] from [{}].".format(output_filename, url)
+        completion_message = "Completed downloading [{}]".format(output_filename)
         q.put(termcolor.colored(completion_message, "white", "on_green"))
     except requests.exceptions.RequestException as ex:
         error_msg = "Problem downloading [{}] from [{}]: {}".format(output_filename, url, ex)
@@ -629,12 +629,13 @@ def download_interesting_files(token, scan_context: ScanningContext):
     """
 
     print(termcolor.colored("START: Attempting to locate and download interesting files (this may take some time)",
-                            "white","on_blue"))
+                            "white", "on_blue"))
     download_directory = scan_context.output_directory + '/downloads'
     pathlib.Path(download_directory).mkdir(parents=True, exist_ok=True)
 
     completed_file_names = Queue()
     file_requests = []
+    unique_file_id = set()
 
     # strips out characters which, though accepted in Slack, aren't accepted in Windows
     bad_chars_re = re.compile('[/:*?"<>|\\\]')  # Windows doesn't like "/ \ : * ? < > " or |
@@ -658,16 +659,19 @@ def download_interesting_files(token, scan_context: ScanningContext):
                 params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100, page=str(page))
                 response_json = requests.get(request_url, params=params, headers=query_header).json()
                 sleep_if_rate_limited(response_json)
-                for file in response_json['files']['matches']:
-                    file_name = file['name']
+                new_files = [new_file for new_file in response_json['files']['matches'] if
+                             new_file['id'] not in unique_file_id]
+                for new_file in new_files:
+                    unique_file_id.add(new_file['id'])
+                    file_name = new_file['id'] + "-" + new_file['name']
                     safe_filename = bad_chars_re.sub('_', file_name)  # use underscores to replace tricky characters
-                    file_dl_args = (file['url_private'], safe_filename) + common_file_dl_params
+                    file_dl_args = (new_file['url_private'], safe_filename) + common_file_dl_params
                     file_requests.append(Process(target=_download_file, args=file_dl_args))
                 page += 1
 
         # Now actually start the requests
         if file_requests:
-            print(termcolor.colored("Retrieving {} files...".format(len(file_requests)), "white", "on_blue"))
+            print(termcolor.colored("INFO: Retrieving {} files...".format(len(file_requests)), "white", "on_blue"))
             file_batches = (file_requests[i:i+DOWNLOAD_BATCH_SIZE]
                             for i in range(0, len(file_requests), DOWNLOAD_BATCH_SIZE))
             for batch in file_batches:
@@ -686,7 +690,6 @@ def download_interesting_files(token, scan_context: ScanningContext):
     else:
         print(termcolor.colored("END: No interesting files discovered.", "white", "on_blue"))
         print('\n')
-
 
 
 def file_cleanup(input_file, scan_context: ScanningContext):
@@ -756,7 +759,7 @@ if __name__ == '__main__':
     parser.add_argument('--no-file-download', dest='file_download', action='store_false',
                         help='disable downloading of files from the Workspace')
     parser.add_argument('--version', action='version',
-                        version='SlackPirate.py v0.9. Developed by Mikail Tunç (@emtunc) with contributions from '
+                        version='SlackPirate.py v0.10. Developed by Mikail Tunç (@emtunc) with contributions from '
                                 'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
     """
     Even with "argument_default=None" in the constructor, all flags were False, so we explicitly set every flag to None
