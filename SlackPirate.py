@@ -634,7 +634,7 @@ def _download_file(url: str, output_filename: str, token: str, user_agent: str, 
         response = requests.get(url, headers=headers)
 
         open("{}/{}".format(download_directory, output_filename), 'wb').write(response.content)
-        completion_message = "Completed downloading [{}] from [{}].".format(output_filename, url)
+        completion_message = "Completed downloading [{}]".format(output_filename)
         q.put(termcolor.colored(completion_message, "white", "on_green"))
     except requests.exceptions.RequestException as ex:
         error_msg = "Problem downloading [{}] from [{}]: {}".format(output_filename, url, ex)
@@ -647,12 +647,13 @@ def download_interesting_files(token, scan_context: ScanningContext):
     """
 
     print(termcolor.colored("START: Attempting to locate and download interesting files (this may take some time)",
-                            "white","on_blue"))
+                            "white", "on_blue"))
     download_directory = scan_context.output_directory + '/downloads'
     pathlib.Path(download_directory).mkdir(parents=True, exist_ok=True)
 
     completed_file_names = Queue()
     file_requests = []
+    unique_file_id = set()
 
     # strips out characters which, though accepted in Slack, aren't accepted in Windows
     bad_chars_re = re.compile('[/:*?"<>|\\\]')  # Windows doesn't like "/ \ : * ? < > " or |
@@ -677,10 +678,12 @@ def download_interesting_files(token, scan_context: ScanningContext):
                 response_json = requests.get(request_url, params=params, headers=query_header).json()
                 sleep_if_rate_limited(response_json)
                 for file in response_json['files']['matches']:
-                    file_name = file['name']
-                    safe_filename = bad_chars_re.sub('_', file_name)  # use underscores to replace tricky characters
-                    file_dl_args = (file['url_private'], safe_filename) + common_file_dl_params
-                    file_requests.append(Process(target=_download_file, args=file_dl_args))
+                    if file['id'] not in unique_file_id:
+                        unique_file_id.add(file['id'])
+                        file_name = file['id'] + "-" + file['name']
+                        safe_filename = bad_chars_re.sub('_', file_name)  # use underscores to replace tricky characters
+                        file_dl_args = (file['url_private'], safe_filename) + common_file_dl_params
+                        file_requests.append(Process(target=_download_file, args=file_dl_args))
                 page += 1
 
         # Now actually start the requests
@@ -704,7 +707,6 @@ def download_interesting_files(token, scan_context: ScanningContext):
     else:
         print(termcolor.colored("END: No interesting files discovered.", "white", "on_blue"))
         print('\n')
-
 
 
 def file_cleanup(input_file, scan_context: ScanningContext):
