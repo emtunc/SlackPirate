@@ -4,6 +4,7 @@ Contains function to select random user agent.
 """
 
 import random
+import requests
 
 user_agents = [
     "Mozilla/5.0 (Windows NT 6.2; WOW64; rv:63.0) Gecko/20100101 Firefox/63.0",
@@ -29,5 +30,15 @@ user_agents = [
 ]
 
 
-def getUserAgent():
-    return random.choice(user_agents)
+def get_user_agent():
+    operating_systems = ['windows', 'osx']
+    browsers = ['chrome', 'firefox']
+    try:
+        user_agent = requests.get(
+            "https://api.user-agent.io/?browser=" + random.choice(browsers) + "&os=" + random.choice(operating_systems))
+        if user_agent.status_code == 200 and "Mozilla" in user_agent.text:
+            return user_agent.text
+        else:
+            return random.choice(user_agents)
+    except requests.exceptions.RequestException:
+        return random.choice(user_agents)
