@@ -12,7 +12,7 @@ import queue
 
 from typing import List
 from multiprocessing import Process, Queue
-from constants import getUserAgent
+from constants import get_user_agent
 
 
 #############
@@ -761,7 +761,7 @@ if __name__ == '__main__':
     parser.add_argument('--no-file-download', dest='file_download', action='store_false',
                         help='disable downloading of files from the Workspace')
     parser.add_argument('--version', action='version',
-                        version='SlackPirate.py v0.10. Developed by Mikail Tunç (@emtunc) with contributions from '
+                        version='SlackPirate.py v0.11. Developed by Mikail Tunç (@emtunc) with contributions from '
                                 'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
     """
     Even with "argument_default=None" in the constructor, all flags were False, so we explicitly set every flag to None
@@ -771,7 +771,7 @@ if __name__ == '__main__':
                         private_key_scan=None, link_scan=None, file_download=None, pinned_message_scan=None)
     args = parser.parse_args()
 
-    selected_agent = getUserAgent()
+    selected_agent = get_user_agent()
 
     if args.cookie is None and args.token is None:  # Must provide one or the other
         print(termcolor.colored("No arguments passed. Run SlackPirate.py --help ", "white", "on_red"))
