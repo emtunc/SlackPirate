@@ -779,7 +779,7 @@ if __name__ == '__main__':
     parser.add_argument('--no-file-download', dest='file_download', action='store_false',
                         help='disable downloading of files from the Workspace')
     parser.add_argument('--version', action='version',
-                        version='SlackPirate.py v0.10. Developed by Mikail Tunç (@emtunc) with contributions from '
+                        version='SlackPirate.py v0.11. Developed by Mikail Tunç (@emtunc) with contributions from '
                                 'the amazing community! https://github.com/emtunc/SlackPirate/graphs/contributors')
     """
     Even with "argument_default=None" in the constructor, all flags were False, so we explicitly set every flag to None
