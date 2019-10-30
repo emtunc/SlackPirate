@@ -74,8 +74,8 @@ LINKS_QUERIES = ["amazonaws",
 # Regex constants with explanatory links
 # https://regex101.com/r/9GRaem/1
 ALREADY_SIGNED_IN_TEAM_REGEX = r"already_signed_in_team\" href=\"([a-zA-Z0-9:./-]+)"
-# https://regex101.com/r/2Hz8AX/1
-SLACK_API_TOKEN_REGEX = r"api_token: \"(xox[a-zA-Z]-[a-zA-Z0-9-]+)\""
+# https://regex101.com/r/2Hz8AX/2
+SLACK_API_TOKEN_REGEX = r"\"api_token\":\"(xox[a-zA-Z]-[a-zA-Z0-9-]+)\""
 # https://regex101.com/r/cSZW0G/1
 WORKSPACE_VALID_EMAILS_REGEX = r"email-domains-formatted=\"(@.+?)[\"]"
 # https://regex101.com/r/jWrF8F/2
@@ -168,7 +168,7 @@ def display_cookie_tokens(cookie, user_agent):
         if already_signed_in_match:
             print(termcolor.colored("This cookie has access to the following Workspaces: \n", "white", "on_blue"))
             for workspace in already_signed_in_match:
-                r = requests.get(workspace, cookies=cookie)
+                r = requests.get(workspace + "/customize/emoji", cookies=cookie)
                 regex_tokens = re.findall(SLACK_API_TOKEN_REGEX, str(r.content))
                 for slack_token in regex_tokens:
                     collected_scan_context = init_scanning_context(token=slack_token, user_agent=user_agent)
