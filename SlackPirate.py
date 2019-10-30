@@ -74,8 +74,8 @@ LINKS_QUERIES = ["amazonaws",
 # Regex constants with explanatory links
 # https://regex101.com/r/9GRaem/1
 ALREADY_SIGNED_IN_TEAM_REGEX = r"already_signed_in_team\" href=\"([a-zA-Z0-9:./-]+)"
-# https://regex101.com/r/2Hz8AX/1
-SLACK_API_TOKEN_REGEX = r"api_token: \"(xox[a-zA-Z]-[a-zA-Z0-9-]+)\""
+# https://regex101.com/r/2Hz8AX/2
+SLACK_API_TOKEN_REGEX = r"\"api_token\":\"(xox[a-zA-Z]-[a-zA-Z0-9-]+)\""
 # https://regex101.com/r/cSZW0G/1
 WORKSPACE_VALID_EMAILS_REGEX = r"email-domains-formatted=\"(@.+?)[\"]"
 # https://regex101.com/r/jWrF8F/2
@@ -168,7 +168,7 @@ def display_cookie_tokens(cookie, user_agent):
         if already_signed_in_match:
             print(termcolor.colored("This cookie has access to the following Workspaces: \n", "white", "on_blue"))
             for workspace in already_signed_in_match:
-                r = requests.get(workspace, cookies=cookie)
+                r = requests.get(workspace + "/customize/emoji", cookies=cookie)
                 regex_tokens = re.findall(SLACK_API_TOKEN_REGEX, str(r.content))
                 for slack_token in regex_tokens:
                     collected_scan_context = init_scanning_context(token=slack_token, user_agent=user_agent)
@@ -617,7 +617,10 @@ def _download_file(url: str, output_filename: str, token: str, user_agent: str, 
         headers = {'Authorization': 'Bearer ' + token, 'User-Agent': user_agent}
         response = requests.get(url, headers=headers)
 
-        open("{}/{}".format(download_directory, output_filename), 'wb').write(response.content)
+        output_file = open("{}/{}".format(download_directory, output_filename), 'wb')
+        output_file.write(response.content)
+        output_file.close()
+
         completion_message = "Completed downloading [{}]".format(output_filename)
         q.put(termcolor.colored(completion_message, "white", "on_green"))
     except requests.exceptions.RequestException as ex:
@@ -660,16 +663,18 @@ def download_interesting_files(token, scan_context: ScanningContext):
                 request_url = "https://slack.com/api/search.files"
                 params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100, page=str(page))
                 response_json = requests.get(request_url, params=params, headers=query_header).json()
-                sleep_if_rate_limited(response_json)
-                new_files = [new_file for new_file in response_json['files']['matches'] if
-                             new_file['id'] not in unique_file_id]
-                for new_file in new_files:
-                    unique_file_id.add(new_file['id'])
-                    file_name = new_file['id'] + "-" + new_file['name']
-                    safe_filename = bad_chars_re.sub('_', file_name)  # use underscores to replace tricky characters
-                    file_dl_args = (new_file['url_private'], safe_filename) + common_file_dl_params
-                    file_requests.append(Process(target=_download_file, args=file_dl_args))
-                page += 1
+                if not sleep_if_rate_limited(response_json):
+                    new_files = [new_file for new_file in response_json['files']['matches'] if
+                                new_file['id'] not in unique_file_id]
+                    for new_file in new_files:
+                        unique_file_id.add(new_file['id'])
+                        file_name = new_file['id'] + "-" + new_file['name']
+                        safe_filename = bad_chars_re.sub('_', file_name)  # use underscores to replace tricky characters
+                        file_dl_args = (new_file['url_private'], safe_filename) + common_file_dl_params
+                        file_requests.append(Process(target=_download_file, args=file_dl_args))
+                    page += 1
+                else:
+                    continue
 
         # Now actually start the requests
         if file_requests:
@@ -728,7 +733,7 @@ if __name__ == '__main__':
                         help='enable retrieval of team access logs')
     parser.add_argument('--no-team-access-logs', dest='team_access_logs', action='store_false',
                         help='disable retrieval of team access logs')
-    parser.add_argument('--user-list', dest='user_list', action='store_true', 
+    parser.add_argument('--user-list', dest='user_list', action='store_true',
                         help='enable retrieval of user list')
     parser.add_argument('--no-user-list', dest='user_list', action='store_false',
                         help='disable retrieval of user list')
