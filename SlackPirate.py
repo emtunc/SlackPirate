@@ -9,6 +9,7 @@ import colorama
 import requests
 import termcolor
 import queue
+import urllib.parse
 
 from typing import List
 from multiprocessing import Process, Queue
@@ -163,6 +164,8 @@ def display_cookie_tokens(cookie, user_agent):
     """
 
     try:
+        if cookie['d'].endswith("="):
+            cookie['d'] = urllib.parse.quote(cookie['d'])
         r = requests.get("https://slackpirate-donotuse.slack.com", cookies=cookie)
         already_signed_in_match = re.findall(ALREADY_SIGNED_IN_TEAM_REGEX, str(r.content))
         if already_signed_in_match:
