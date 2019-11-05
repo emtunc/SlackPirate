@@ -354,7 +354,7 @@ def find_s3(token, scan_context: ScanningContext):
 
 def find_credentials(token, scan_context: ScanningContext):
     print(termcolor.colored("START: Attempting to find references to credentials", "white", "on_blue"))
-    pagination = dict()
+    page_count_by_query = dict()
 
     try:
         r = None
@@ -366,14 +366,14 @@ def find_credentials(token, scan_context: ScanningContext):
                                  headers={'User-Agent': scan_context.user_agent}).json()
                 if not sleep_if_rate_limited(r):
                     break
-            pagination[query] = (r['messages']['pagination']['page_count'])
+            page_count_by_query[query] = (r['messages']['pagination']['page_count'])
 
-        for key, value in pagination.items():
+        for query, page_count in page_count_by_query.items():
             page = 1
-            while page <= value:
+            while page <= page_count:
                 sleep_if_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
-                params = dict(token=token, query="\"{}\"".format(key), pretty=1, count=100, page=str(page))
+                params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100, page=str(page))
                 r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(CREDENTIALS_REGEX, str(r))
                 with open(scan_context.output_directory + '/' + FILE_CREDENTIALS, 'a', encoding="utf-8") as log_output:
@@ -392,7 +392,7 @@ def find_credentials(token, scan_context: ScanningContext):
 
 def find_aws_keys(token, scan_context: ScanningContext):
     print(termcolor.colored("START: Attempting to find references to AWS keys", "white", "on_blue"))
-    pagination = {}
+    page_count_by_query = {}
 
     try:
         r = None
@@ -404,14 +404,14 @@ def find_aws_keys(token, scan_context: ScanningContext):
                              headers={'User-Agent': scan_context.user_agent}).json()
                 if not sleep_if_rate_limited(r):
                     break
-            pagination[query] = (r['messages']['pagination']['page_count'])
+            page_count_by_query[query] = (r['messages']['pagination']['page_count'])
 
-        for key, value in pagination.items():
+        for query, page_count in page_count_by_query.items():
             page = 1
-            while page <= value:
+            while page <= page_count:
                 sleep_if_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
-                params = dict(token=token, query=key, pretty=1, count=100, page=str(page))
+                params = dict(token=token, query=query, pretty=1, count=100, page=str(page))
                 r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(AWS_KEYS_REGEX, str(r))
                 with open(scan_context.output_directory + '/' + FILE_AWS_KEYS, 'a', encoding="utf-8") as log_output:
@@ -434,7 +434,7 @@ def find_private_keys(token, scan_context: ScanningContext):
     """
 
     print(termcolor.colored("START: Attempting to find references to private keys", "white", "on_blue"))
-    pagination = {}
+    page_count_by_query = {}
 
     try:
         r = None
@@ -446,14 +446,14 @@ def find_private_keys(token, scan_context: ScanningContext):
                              headers={'User-Agent': scan_context.user_agent}).json()
                 if not sleep_if_rate_limited(r):
                     break
-            pagination[query] = (r['messages']['pagination']['page_count'])
+            page_count_by_query[query] = (r['messages']['pagination']['page_count'])
 
-        for key, value in pagination.items():
+        for query, page_count in page_count_by_query.items():
             page = 1
-            while page <= value:
+            while page <= page_count:
                 sleep_if_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
-                params = dict(token=token, query="\"{}\"".format(key), pretty=1, count=100, page=str(page))
+                params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100, page=str(page))
                 r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(PRIVATE_KEYS_REGEX, str(r))
                 remove_new_line_char = [w.replace('\\n', '\n') for w in regex_results]
@@ -566,7 +566,7 @@ def find_interesting_links(token, scan_context: ScanningContext):
     """
 
     print(termcolor.colored("START: Attempting to find references to interesting URLs", "white", "on_blue"))
-    pagination = {}
+    page_count_by_query = {}
 
     try:
         r = None
@@ -577,14 +577,14 @@ def find_interesting_links(token, scan_context: ScanningContext):
                 r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
                 if not sleep_if_rate_limited(r):
                     break
-            pagination[query] = (r['messages']['pagination']['page_count'])
+            page_count_by_query[query] = (r['messages']['pagination']['page_count'])
 
-        for key, value in pagination.items():
+        for query, page_count in page_count_by_query.items():
             page = 1
-            while page <= value:
+            while page <= page_count:
                 sleep_if_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
-                params = dict(token=token, query="has:link {}".format(key), pretty=1, count=100, page=str(page))
+                params = dict(token=token, query="has:link {}".format(query), pretty=1, count=100, page=str(page))
                 r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(LINKS_REGEX, str(r))
                 with open(scan_context.output_directory + '/' + FILE_LINKS, 'a', encoding="utf-8") as log_output:
