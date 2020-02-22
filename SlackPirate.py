@@ -35,7 +35,7 @@ FILE_LINKS = "URLs.txt"
 
 # Query pieces
 S3_QUERIES = ["s3.amazonaws.com", "s3://", "https://s3", "http://s3"]
-CREDENTIALS_QUERIES = ["password:", "password is", "pwd", "passwd"]
+CREDENTIALS_QUERIES = ["password", "pwd", "passwd"]
 AWS_KEYS_QUERIES = ["ASIA*", "AKIA*"]
 PRIVATE_KEYS_QUERIES = ["BEGIN DSA PRIVATE",
                         "BEGIN EC PRIVATE",
@@ -88,12 +88,6 @@ S3_REGEX = r"(" \
            r"|s3-[a-zA-Z0-9-\.\_\/]+" \
            r"|s3.amazonaws.com/[a-zA-Z0-9-\.\_]+" \
            r"|s3.console.aws.amazon.com/s3/buckets/[a-zA-Z0-9-\.\_]+)"
-# https://regex101.com/r/DoPV1M/1
-CREDENTIALS_REGEX = r"(?i)(" \
-                    r"password\s*[`=:\"]+\s*[^\s]+" \
-                    r"|password is\s*[`=:\"]+\s*[^\s]+" \
-                    r"|pwd\s*[`=:\"]+\s*[^\s]+" \
-                    r"|passwd\s*[`=:\"]+\s*[^\s]+)"
 # https://regex101.com/r/IEq5nU/4
 AWS_KEYS_REGEX = r"((?<![A-Za-z0-9/+])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])|(?<![A-Z0-9])[A-Z0-9]{20}(?![A-Z0-9]))"
 # https://regex101.com/r/SU43wh/1
@@ -375,10 +369,9 @@ def find_credentials(token, scan_context: ScanningContext):
                 request_url = "https://slack.com/api/search.messages"
                 params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100, page=str(page))
                 r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
-                regex_results = re.findall(CREDENTIALS_REGEX, str(r))
                 with open(scan_context.output_directory + '/' + FILE_CREDENTIALS, 'a', encoding="utf-8") as log_output:
-                    for item in set(regex_results):
-                        log_output.write(item + "\n")
+                    password_texts = [ password_text['text'] for password_text in r['messages']['matches']]
+                    log_output.write('\n'.join(password_texts))
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
