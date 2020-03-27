@@ -88,12 +88,12 @@ S3_REGEX = r"(" \
            r"|s3-[a-zA-Z0-9-\.\_\/]+" \
            r"|s3.amazonaws.com/[a-zA-Z0-9-\.\_]+" \
            r"|s3.console.aws.amazon.com/s3/buckets/[a-zA-Z0-9-\.\_]+)"
-# https://regex101.com/r/DoPV1M/1
+# https://regex101.com/r/DoPV1M/3
 CREDENTIALS_REGEX = r"(?i)(" \
-                    r"password\s*[`=:\"]+\s*[^\s]+" \
-                    r"|password is\s*[`=:\"]+\s*[^\s]+" \
-                    r"|pwd\s*[`=:\"]+\s*[^\s]+" \
-                    r"|passwd\s*[`=:\"]+\s*[^\s]+)"
+                    r"password\s*[`=:\"]+\s*[^\s]+|" \
+                    r"password is\s*[`=:\"]*\s*[^\s]+|" \
+                    r"pwd\s*[`=:\"]*\s*[^\s]+|" \
+                    r"passwd\s*[`=:\"]+\s*[^\s]+)"
 # https://regex101.com/r/IEq5nU/4
 AWS_KEYS_REGEX = r"((?<![A-Za-z0-9/+])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])|(?<![A-Z0-9])[A-Z0-9]{20}(?![A-Z0-9]))"
 # https://regex101.com/r/SU43wh/1
