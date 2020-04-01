@@ -23,6 +23,7 @@ from constants import get_user_agent
 #############
 POLL_TIMEOUT = 0.5  # Seconds to wait on a retrieval to finish
 DOWNLOAD_BATCH_SIZE = 25  # Pull up to this many files at once
+CSV_HEADERS = ['timestamp', 'link', 'channel_id', 'channel_name', 'user_id', 'user_name', 'regex_results']
 # Query params
 MAX_RETRIEVAL_COUNT = 900
 # Output file names
@@ -333,7 +334,7 @@ def find_s3(token, scan_context: ScanningContext):
         if verbose:
             with open(scan_context.output_directory + '/' + FILE_S3.replace('txt','csv'), mode='a') as log_output:
                 writer = csv.writer(log_output, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                writer.writerow(['timestamp', 'link', 'channel_id', 'channel_name', 'user_id', 'user_name', 'regex_results'])
+                writer.writerow(CSV_HEADERS)
 
         for query, page_count in page_count_by_query.items():
             page = 1
@@ -380,7 +381,7 @@ def find_credentials(token, scan_context: ScanningContext):
         if verbose:
             with open(scan_context.output_directory + '/' + FILE_CREDENTIALS.replace('txt','csv'), mode='a') as log_output:
                 writer = csv.writer(log_output, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                writer.writerow(['timestamp', 'link', 'channel_id', 'channel_name', 'user_id', 'user_name', 'regex_results'])
+                writer.writerow(CSV_HEADERS)
 
         for query, page_count in page_count_by_query.items():
             page = 1
@@ -426,7 +427,7 @@ def find_aws_keys(token, scan_context: ScanningContext):
         if verbose:
             with open(scan_context.output_directory + '/' + FILE_AWS_KEYS.replace('txt','csv'), mode='a') as log_output:
                 writer = csv.writer(log_output, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                writer.writerow(['timestamp', 'link', 'channel_id', 'channel_name', 'user_id', 'user_name', 'regex_results'])
+                writer.writerow(CSV_HEADERS)
 
         for query, page_count in page_count_by_query.items():
             page = 1
@@ -476,7 +477,7 @@ def find_private_keys(token, scan_context: ScanningContext):
         if verbose:
             with open(scan_context.output_directory + '/' + FILE_PRIVATE_KEYS.replace('txt','csv'), mode='a') as log_output:
                 writer = csv.writer(log_output, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                writer.writerow(['timestamp', 'link', 'channel_id', 'channel_name', 'user_id', 'user_name', 'regex_results'])
+                writer.writerow(CSV_HEADERS)
 
         for query, page_count in page_count_by_query.items():
             page = 1
@@ -630,7 +631,7 @@ def find_interesting_links(token, scan_context: ScanningContext):
         if verbose:
             with open(scan_context.output_directory + '/' + FILE_LINKS.replace('txt','csv'), mode='a') as log_output:
                 writer = csv.writer(log_output, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-                writer.writerow(['timestamp', 'link', 'channel_id', 'channel_name', 'user_id', 'user_name', 'regex_results'])
+                writer.writerow(CSV_HEADERS)
 
         for query, page_count in page_count_by_query.items():
             page = 1
