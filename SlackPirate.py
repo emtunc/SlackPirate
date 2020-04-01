@@ -10,7 +10,9 @@ import requests
 import termcolor
 import queue
 import urllib.parse
+import csv
 
+from datetime import datetime
 from typing import List
 from multiprocessing import Process, Queue
 from constants import get_user_agent
@@ -21,6 +23,7 @@ from constants import get_user_agent
 #############
 POLL_TIMEOUT = 0.5  # Seconds to wait on a retrieval to finish
 DOWNLOAD_BATCH_SIZE = 25  # Pull up to this many files at once
+CSV_HEADERS = ['timestamp', 'link', 'channel_id', 'channel_name', 'user_id', 'user_name', 'regex_results']
 # Query params
 MAX_RETRIEVAL_COUNT = 900
 # Output file names
@@ -328,6 +331,11 @@ def find_s3(token, scan_context: ScanningContext):
                     break
             page_count_by_query[query] = (r['messages']['pagination']['page_count'])
 
+        if verbose:
+            with open(scan_context.output_directory + '/' + FILE_S3.replace('txt','csv'), mode='a') as log_output:
+                writer = csv.writer(log_output, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                writer.writerow(CSV_HEADERS)
+
         for query, page_count in page_count_by_query.items():
             page = 1
             while page <= page_count:
@@ -337,9 +345,12 @@ def find_s3(token, scan_context: ScanningContext):
                                  params=params,
                                  headers={'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(S3_REGEX, str(r))
-                with open(scan_context.output_directory + '/' + FILE_S3, 'a', encoding="utf-8") as log_output:
-                    for item in set(regex_results):
-                        log_output.write(item + "\n")
+                if verbose:
+                    write_to_csv(r, S3_REGEX, FILE_S3, scan_context)
+                else:
+                    with open(scan_context.output_directory + '/' + FILE_S3, 'a', encoding="utf-8") as log_output:
+                        for item in set(regex_results):
+                            log_output.write(item + "\n")
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
@@ -367,6 +378,11 @@ def find_credentials(token, scan_context: ScanningContext):
                     break
             page_count_by_query[query] = (r['messages']['pagination']['page_count'])
 
+        if verbose:
+            with open(scan_context.output_directory + '/' + FILE_CREDENTIALS.replace('txt','csv'), mode='a') as log_output:
+                writer = csv.writer(log_output, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                writer.writerow(CSV_HEADERS)
+
         for query, page_count in page_count_by_query.items():
             page = 1
             while page <= page_count:
@@ -375,9 +391,12 @@ def find_credentials(token, scan_context: ScanningContext):
                 params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100, page=str(page))
                 r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(CREDENTIALS_REGEX, str(r))
-                with open(scan_context.output_directory + '/' + FILE_CREDENTIALS, 'a', encoding="utf-8") as log_output:
-                    for item in set(regex_results):
-                        log_output.write(item + "\n")
+                if verbose:
+                    write_to_csv(r, CREDENTIALS_REGEX, FILE_CREDENTIALS, scan_context)
+                else:
+                    with open(scan_context.output_directory + '/' + FILE_CREDENTIALS, 'a', encoding="utf-8") as log_output:
+                        for item in set(regex_results):
+                            log_output.write(item + "\n")
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
@@ -405,6 +424,11 @@ def find_aws_keys(token, scan_context: ScanningContext):
                     break
             page_count_by_query[query] = (r['messages']['pagination']['page_count'])
 
+        if verbose:
+            with open(scan_context.output_directory + '/' + FILE_AWS_KEYS.replace('txt','csv'), mode='a') as log_output:
+                writer = csv.writer(log_output, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                writer.writerow(CSV_HEADERS)
+
         for query, page_count in page_count_by_query.items():
             page = 1
             while page <= page_count:
@@ -413,9 +437,12 @@ def find_aws_keys(token, scan_context: ScanningContext):
                 params = dict(token=token, query=query, pretty=1, count=100, page=str(page))
                 r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(AWS_KEYS_REGEX, str(r))
-                with open(scan_context.output_directory + '/' + FILE_AWS_KEYS, 'a', encoding="utf-8") as log_output:
-                    for item in set(regex_results):
-                        log_output.write(item + "\n")
+                if verbose:
+                    write_to_csv(r, AWS_KEYS_REGEX, FILE_AWS_KEYS, scan_context)
+                else:
+                    with open(scan_context.output_directory + '/' + FILE_AWS_KEYS, 'a', encoding="utf-8") as log_output:
+                        for item in set(regex_results):
+                            log_output.write(item + "\n")
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
@@ -447,6 +474,11 @@ def find_private_keys(token, scan_context: ScanningContext):
                     break
             page_count_by_query[query] = (r['messages']['pagination']['page_count'])
 
+        if verbose:
+            with open(scan_context.output_directory + '/' + FILE_PRIVATE_KEYS.replace('txt','csv'), mode='a') as log_output:
+                writer = csv.writer(log_output, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                writer.writerow(CSV_HEADERS)
+
         for query, page_count in page_count_by_query.items():
             page = 1
             while page <= page_count:
@@ -456,9 +488,12 @@ def find_private_keys(token, scan_context: ScanningContext):
                 r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(PRIVATE_KEYS_REGEX, str(r))
                 remove_new_line_char = [w.replace('\\n', '\n') for w in regex_results]
-                with open(scan_context.output_directory + '/' + FILE_PRIVATE_KEYS, 'a', encoding="utf-8") as log_output:
-                    for item in set(remove_new_line_char):
-                        log_output.write(item + "\n\n")
+                if verbose:
+                    write_to_csv(r, PRIVATE_KEYS_REGEX, FILE_PRIVATE_KEYS, scan_context)
+                else:
+                    with open(scan_context.output_directory + '/' + FILE_PRIVATE_KEYS, 'a', encoding="utf-8") as log_output:
+                        for item in set(remove_new_line_char):
+                            log_output.write(item + "\n\n")
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
@@ -500,6 +535,21 @@ def find_all_channels(token, scan_context: ScanningContext):
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
     return channel_list
+
+
+def write_to_csv(response, regex, file, scan_context: ScanningContext):
+    for match in response['messages']['matches']:
+        ts = datetime.utcfromtimestamp(int(match['ts'].split('.')[0])).strftime('%Y-%m-%d %H:%M:%S')
+        link = match['permalink']
+        channel_id = match['channel']['id']
+        channel_name = match['channel']['name']
+        user_id = match['user']
+        user_name = match['username']
+        match.pop('permalink', None)
+        regex_results = set(re.findall(regex, str(match)))
+        with open(scan_context.output_directory + '/' + file.replace('txt','csv'), mode='a') as log_output:
+            writer = csv.writer(log_output, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            writer.writerow([ts, link, channel_id, channel_name, user_id, user_name, regex_results])
 
 
 def _write_messages(file_path: str, contents: List[str]):
@@ -578,6 +628,11 @@ def find_interesting_links(token, scan_context: ScanningContext):
                     break
             page_count_by_query[query] = (r['messages']['pagination']['page_count'])
 
+        if verbose:
+            with open(scan_context.output_directory + '/' + FILE_LINKS.replace('txt','csv'), mode='a') as log_output:
+                writer = csv.writer(log_output, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                writer.writerow(CSV_HEADERS)
+
         for query, page_count in page_count_by_query.items():
             page = 1
             while page <= page_count:
@@ -586,9 +641,12 @@ def find_interesting_links(token, scan_context: ScanningContext):
                 params = dict(token=token, query="has:link {}".format(query), pretty=1, count=100, page=str(page))
                 r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(LINKS_REGEX, str(r))
-                with open(scan_context.output_directory + '/' + FILE_LINKS, 'a', encoding="utf-8") as log_output:
-                    for item in set(regex_results):
-                        log_output.write(item + "\n")
+                if verbose:
+                    write_to_csv(r, LINKS_REGEX, FILE_LINKS, scan_context)
+                else:
+                    with open(scan_context.output_directory + '/' + FILE_LINKS, 'a', encoding="utf-8") as log_output:
+                        for item in set(regex_results):
+                            log_output.write(item + "\n")
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "white", "on_red"))
@@ -731,6 +789,8 @@ if __name__ == '__main__':
                              ' Results along with tokens will be printed to stdout')
     parser.add_argument('--token', type=str, required=False,
                         help='Slack Workspace token. The token should start with XOX.')
+    parser.add_argument('-v', '--verbose', action="store_true",
+                        help='Turn on verbosity for the output files')
     parser.add_argument('--team-access-logs', dest='team_access_logs', action='store_true',
                         help='enable retrieval of team access logs')
     parser.add_argument('--no-team-access-logs', dest='team_access_logs', action='store_false',
@@ -816,8 +876,10 @@ if __name__ == '__main__':
 
     args_as_dict = vars(args)  # Using a dict makes the flags easier to check
     # delete the cookie and token args which are not scan filter related so we can run all() and any() on the dict values
+    verbose = args.verbose
     del args_as_dict['cookie']
     del args_as_dict['token']
+    del args_as_dict['verbose']
 
     # no flags were specified - we run all scans
     no_flags_specified = all(value == None for value in args_as_dict.values())
