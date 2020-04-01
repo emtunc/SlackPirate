@@ -88,11 +88,11 @@ The script has been developed, tested and confirmed working on Python 3.5, 3.6 a
 
 ## Usage
 
- ```./SlackPirate.py --help```
+ ```python3 SlackPirate.py --help```
  
   * Display the help menu - this includes information about all scan modules you can explicitly select or ignore
 
- ```./SlackPirate.py --cookie <cookie>```
+ ```python3 SlackPirate.py --cookie <cookie>```
  
 This will do the following:
   * Find any associated Workspaces that can be accessed using that cookie
@@ -100,7 +100,7 @@ This will do the following:
   * Look for API Tokens in each returned Workspace
   * Print to standard output for use in the next command
 
-```./SlackPirate.py --token <token>```
+```python3 SlackPirate.py --token <token>```
     
 This will do the following:
   * Check Token validity and only continue if Slack returns `True`
@@ -116,13 +116,17 @@ This will do the following:
   * Find references to interesting URLs and links
   * Lastly, the tool will attempt to download files based on pre-defined keywords
 
-```./SlackPirate.py --token <token> --s3-scan```
+```python3 SlackPirate.py --token <token> --s3-scan```
     
   * This will instruct the tool to only run the S3 scan
 
-```./SlackPirate.py --token <token> --no-s3-scan```
+```python3 SlackPirate.py --token <token> --no-s3-scan```
     
   * This will instruct the tool to run all scans apart from the S3 scan
+  
+```python3 SlackPirate.py --token <token> --verbose```
+    
+  * Verbose mode will output files in .CSV - will provide a lot more information such as channel names, usernames, perma-links and more.
 
 ## Screenshots
 
