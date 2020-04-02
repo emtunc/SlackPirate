@@ -98,7 +98,8 @@ CREDENTIALS_REGEX = r"(?i)(" \
                     r"pwd\s*[`=:\"]*\s*[^\s]+|" \
                     r"passwd\s*[`=:\"]+\s*[^\s]+)"
 # https://regex101.com/r/IEq5nU/4
-AWS_KEYS_REGEX = r"((?<![A-Za-z0-9/+])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])|(?<![A-Z0-9])[A-Z0-9]{20}(?![A-Z0-9]))"
+AWS_KEYS_REGEX = r"(?!com/archives/[A-Z0-9]{9}/p[0-9]{16})" \
+                 r"((?<![A-Za-z0-9/+])[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+])|(?<![A-Z0-9])[A-Z0-9]{20}(?![A-Z0-9]))"
 # https://regex101.com/r/SU43wh/1
 # Top-level domain capture group
 TLD_GROUP = r"(?:com|net|org|edu|gov|mil|aero|asia|biz|cat|coop|info|int" \
