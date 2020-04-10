@@ -151,7 +151,7 @@ def sleep_if_rate_limited(slack_api_json_response):
     """
 
     if slack_api_json_response['ok'] is False and slack_api_json_response['error'] == 'ratelimited':
-        print(termcolor.colored("INFO: Slack API rate limit hit - sleeping for 60 seconds", "white", "on_blue"))
+        print(termcolor.colored("INFO: Slack API rate limit hit - sleeping for 60 seconds", "blue"))
         time.sleep(60)
         return True
     else:
@@ -172,21 +172,21 @@ def display_cookie_tokens(cookie, user_agent):
         r = requests.get("https://slackpirate-donotuse.slack.com", cookies=cookie)
         already_signed_in_match = re.findall(ALREADY_SIGNED_IN_TEAM_REGEX, str(r.content))
         if already_signed_in_match:
-            print(termcolor.colored("This cookie has access to the following Workspaces: \n", "white", "on_blue"))
+            print(termcolor.colored("This cookie has access to the following Workspaces: \n", "blue"))
             for workspace in already_signed_in_match:
                 r = requests.get(workspace + "/customize/emoji", cookies=cookie)
                 regex_tokens = re.findall(SLACK_API_TOKEN_REGEX, str(r.content))
                 for slack_token in regex_tokens:
                     collected_scan_context = init_scanning_context(token=slack_token, user_agent=user_agent)
                     if check_if_admin_token(token=slack_token, scan_context=collected_scan_context):
-                        print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (admin token!)', "white", "on_magenta"))
+                        print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (admin token!)', "magenta"))
                     else:
-                        print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (not admin)', "white", "on_green"))
+                        print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (not admin)', "green"))
         else:
-            print(termcolor.colored("No workspaces were found for this cookie", "white", "on_red"))
+            print(termcolor.colored("No workspaces were found for this cookie", "red"))
             exit()
     except requests.exceptions.RequestException as exception:
-        print(termcolor.colored(exception, "white", "on_red"))
+        print(termcolor.colored(exception, "red"))
     exit()
 
 
@@ -203,10 +203,10 @@ def init_scanning_context(token, user_agent: str) -> ScanningContext:
             result = ScanningContext(output_directory=str(r['team']) + '_' + time.strftime("%Y%m%d-%H%M%S"),
                                      slack_workspace=str(r['url']), user_agent=user_agent, user_id=str(r['user_id']), username=str(r['user']))
         else:
-            print(termcolor.colored("ERR: Token not valid. Slack error: " + str(r['error']), "white", "on_red"))
+            print(termcolor.colored("ERR: Token not valid. Slack error: " + str(r['error']), "red"))
             exit()
     except requests.exceptions.RequestException as exception:
-        print(termcolor.colored(exception, "white", "on_red"))
+        print(termcolor.colored(exception, "red"))
     return result
 
 
@@ -220,7 +220,7 @@ def check_if_admin_token(token, scan_context: ScanningContext):
             token=token, pretty=1, user=scan_context.user_id), headers={'User-Agent': scan_context.user_agent}).json()
         return r['user']['is_admin'] or r['user']['is_owner'] or r['user']['is_primary_owner']
     except requests.exceptions.RequestException as exception:
-        print(termcolor.colored(exception, "white", "on_red"))
+        print(termcolor.colored(exception, "red"))
 
 
 def print_interesting_information(scan_context: ScanningContext):
@@ -234,11 +234,10 @@ def print_interesting_information(scan_context: ScanningContext):
         team_domains_match = re.findall(WORKSPACE_VALID_EMAILS_REGEX, str(r.content))
         for domain in team_domains_match:
             print(
-                termcolor.colored("INFO: The following domains can be used on this Slack Workspace: " + domain,
-                                  "white", "on_blue"))
+                termcolor.colored("INFO: The following domains can be used on this Slack Workspace: " + domain, "blue"))
             print(termcolor.colored("\n"))
     except requests.exceptions.RequestException as exception:
-        print(termcolor.colored(exception, "white", "on_red"))
+        print(termcolor.colored(exception, "red"))
 
 
 def dump_team_access_logs(token, scan_context: ScanningContext):
@@ -248,7 +247,7 @@ def dump_team_access_logs(token, scan_context: ScanningContext):
     """
 
     results = []
-    print(termcolor.colored("START: Attempting download Workspace access logs", "white", "on_blue"))
+    print(termcolor.colored("START: Attempting download Workspace access logs", "blue"))
     try:
         r = requests.get("https://slack.com/api/team.accessLogs",
                          params=dict(token=token, pretty=1, count=MAX_RETRIEVAL_COUNT),
@@ -262,14 +261,14 @@ def dump_team_access_logs(token, scan_context: ScanningContext):
         else:
             print(termcolor.colored(
                 "END: Unable to dump access logs (this is normal if you don't have a privileged token on a non-free "
-                "Workspace). Slack error: " + str(r['error']), "white", "on_blue"))
+                "Workspace). Slack error: " + str(r['error']), "blue"))
             print(termcolor.colored("\n"))
             return
     except requests.exceptions.RequestException as exception:
-        print(termcolor.colored(exception, "white", "on_red"))
+        print(termcolor.colored(exception, "red"))
     print(termcolor.colored(
         "END: Successfully dumped access logs! Filename: ./" + scan_context.output_directory + "/" + FILE_ACCESS_LOGS,
-        "white", "on_green"))
+        "green"))
     print(termcolor.colored("\n"))
 
 
@@ -283,7 +282,7 @@ def dump_user_list(token, scan_context: ScanningContext):
     `One day pagination will become required to use this method.`
     """
 
-    print(termcolor.colored("START: Attempting to download Workspace user list", "white", "on_blue"))
+    print(termcolor.colored("START: Attempting to download Workspace user list", "blue"))
     pagination_cursor = ''  # virtual pagination - apparently this is what the cool kids do these days :-)
     results = []
     try:
@@ -294,8 +293,7 @@ def dump_user_list(token, scan_context: ScanningContext):
             if not sleep_if_rate_limited(r):
                 break
         if str(r['ok']) == 'False':
-            print(termcolor.colored("END: Unable to dump the user list. Slack error: " + str(r['error']),
-                                    "white", "on_yellow"))
+            print(termcolor.colored("END: Unable to dump the user list. Slack error: " + str(r['error']), "red"))
             print(termcolor.colored("\n"))
         else:
             pagination_cursor = r['response_metadata']['next_cursor']
@@ -309,16 +307,15 @@ def dump_user_list(token, scan_context: ScanningContext):
             with open(scan_context.output_directory + '/' + FILE_USER_LIST, 'a', encoding="utf-8") as outfile:
                 json.dump(results, outfile, indent=4, sort_keys=True, ensure_ascii=True)
     except requests.exceptions.RequestException as exception:
-        print(termcolor.colored(exception, "white", "on_red"))
+        print(termcolor.colored(exception, "red"))
     print(
         termcolor.colored("END: Successfully dumped user list! Filename: ./" + scan_context.output_directory +
-                          "/" + FILE_USER_LIST,
-                          "white", "on_green"))
+                          "/" + FILE_USER_LIST, "green"))
     print(termcolor.colored("\n"))
 
 
 def find_s3(token, scan_context: ScanningContext):
-    print(termcolor.colored("START: Attempting to find references to S3 buckets", "white", "on_blue"))
+    print(termcolor.colored("START: Attempting to find references to S3 buckets", "blue"))
     page_count_by_query = dict()
 
     try:
@@ -354,17 +351,17 @@ def find_s3(token, scan_context: ScanningContext):
                             log_output.write(item + "\n")
                 page += 1
     except requests.exceptions.RequestException as exception:
-        print(termcolor.colored(exception, "white", "on_red"))
+        print(termcolor.colored(exception, "red"))
         print(termcolor.colored("\n"))
     file_cleanup(input_file=FILE_S3, scan_context=scan_context)
     print(
         termcolor.colored("END: If any S3 buckets were found, they will be here: ./" + scan_context.output_directory +
-                          "/" + FILE_S3, "white", "on_green"))
+                          "/" + FILE_S3, "green"))
     print(termcolor.colored("\n"))
 
 
 def find_credentials(token, scan_context: ScanningContext):
-    print(termcolor.colored("START: Attempting to find references to credentials", "white", "on_blue"))
+    print(termcolor.colored("START: Attempting to find references to credentials", "blue"))
     page_count_by_query = dict()
 
     try:
@@ -400,17 +397,16 @@ def find_credentials(token, scan_context: ScanningContext):
                             log_output.write(item + "\n")
                 page += 1
     except requests.exceptions.RequestException as exception:
-        print(termcolor.colored(exception, "white", "on_red"))
+        print(termcolor.colored(exception, "red"))
     file_cleanup(input_file=FILE_CREDENTIALS, scan_context=scan_context)
     print(termcolor.colored(
         "END: If any credentials were found, they will be here: ./" + scan_context.output_directory +
-        "/" + FILE_CREDENTIALS,
-        "white", "on_green"))
+        "/" + FILE_CREDENTIALS, "green"))
     print(termcolor.colored("\n"))
 
 
 def find_aws_keys(token, scan_context: ScanningContext):
-    print(termcolor.colored("START: Attempting to find references to AWS keys", "white", "on_blue"))
+    print(termcolor.colored("START: Attempting to find references to AWS keys", "blue"))
     page_count_by_query = {}
 
     try:
@@ -446,11 +442,11 @@ def find_aws_keys(token, scan_context: ScanningContext):
                             log_output.write(item + "\n")
                 page += 1
     except requests.exceptions.RequestException as exception:
-        print(termcolor.colored(exception, "white", "on_red"))
+        print(termcolor.colored(exception, "red"))
     file_cleanup(input_file=FILE_AWS_KEYS, scan_context=scan_context)
     print(termcolor.colored(
         "END: If any AWS keys were found, they will be here: ./" + scan_context.output_directory +
-        "/" + FILE_AWS_KEYS, "white", "on_green"))
+        "/" + FILE_AWS_KEYS, "green"))
     print(termcolor.colored("\n"))
 
 
@@ -460,7 +456,7 @@ def find_private_keys(token, scan_context: ScanningContext):
     we're replacing the string with an actual \n new line :-)
     """
 
-    print(termcolor.colored("START: Attempting to find references to private keys", "white", "on_blue"))
+    print(termcolor.colored("START: Attempting to find references to private keys", "blue"))
     page_count_by_query = {}
 
     try:
@@ -497,11 +493,11 @@ def find_private_keys(token, scan_context: ScanningContext):
                             log_output.write(item + "\n\n")
                 page += 1
     except requests.exceptions.RequestException as exception:
-        print(termcolor.colored(exception, "white", "on_red"))
+        print(termcolor.colored(exception, "red"))
 
     print(termcolor.colored(
         "END: If any private keys were found, they will be here: ./" + scan_context.output_directory +
-        "/" + FILE_PRIVATE_KEYS, "white", "on_green"))
+        "/" + FILE_PRIVATE_KEYS, "green"))
     print(termcolor.colored("\n"))
 
 
@@ -534,7 +530,7 @@ def find_all_channels(token, scan_context: ScanningContext):
                 # Add the channel name as the key and id as the value in the dictionary.
                 channel_list[channel['name']] = channel['id']
     except requests.exceptions.RequestException as exception:
-        print(termcolor.colored(exception, "white", "on_red"))
+        print(termcolor.colored(exception, "red"))
     return channel_list
 
 
@@ -556,7 +552,7 @@ def write_to_csv(response, regex, file, scan_context: ScanningContext):
 def _write_messages(file_path: str, contents: List[str]):
     """Helper function to write message content to the specified file"""
     if contents:
-        print(termcolor.colored("INFO: Writing {} pinned messages".format(len(contents)), "white", "on_blue"))
+        print(termcolor.colored("INFO: Writing {} pinned messages".format(len(contents)), "blue"))
         with open(file_path, 'a', encoding="utf-8") as out:
             for text_content in contents:
                 out.write(text_content)
@@ -570,7 +566,7 @@ def find_pinned_messages(token, scan_context: ScanningContext):
     the channel_id to pins.list which will either return pinned messages or not. If it does, dump to file :-)
     """
 
-    print(termcolor.colored("START: Attempting to find references to pinned messages", "white", "on_blue"))
+    print(termcolor.colored("START: Attempting to find references to pinned messages", "blue"))
     channel_list = find_all_channels(token, scan_context)
     output_file = "{}/{}".format(scan_context.output_directory, FILE_PINNED_MESSAGES)
 
@@ -597,15 +593,14 @@ def find_pinned_messages(token, scan_context: ScanningContext):
                 total_pinned_messages += len(channel_pinned_messages)
                 break
     except requests.exceptions.RequestException as exception:
-        print(termcolor.colored(exception, "white", "on_red"))
+        print(termcolor.colored(exception, "red"))
 
     if total_pinned_messages > 0:
         _write_messages(file_path=output_file, contents=pinned_message_contents)
         print(termcolor.colored(
-            "END: Wrote {} pinned messages to: ./{}".format(total_pinned_messages, output_file),
-            "white", "on_green"))
+            "END: Wrote {} pinned messages to: ./{}".format(total_pinned_messages, output_file), "green"))
     else:
-        print(termcolor.colored("END: No pinned messages were found.", "white", "on_green"))
+        print(termcolor.colored("END: No pinned messages were found.", "green"))
     print(termcolor.colored("\n"))
 
 
@@ -615,7 +610,7 @@ def find_interesting_links(token, scan_context: ScanningContext):
     We're using the special Slack search 'has:link' here.
     """
 
-    print(termcolor.colored("START: Attempting to find references to interesting URLs", "white", "on_blue"))
+    print(termcolor.colored("START: Attempting to find references to interesting URLs", "blue"))
     page_count_by_query = {}
 
     try:
@@ -650,10 +645,10 @@ def find_interesting_links(token, scan_context: ScanningContext):
                             log_output.write(item + "\n")
                 page += 1
     except requests.exceptions.RequestException as exception:
-        print(termcolor.colored(exception, "white", "on_red"))
+        print(termcolor.colored(exception, "red"))
     file_cleanup(input_file=FILE_LINKS, scan_context=scan_context)
     print(termcolor.colored("END: If any URLs were found, they will be here: ./" + scan_context.output_directory +
-                            "/" + FILE_LINKS, "white", "on_green"))
+                            "/" + FILE_LINKS, "green"))
     print(termcolor.colored("\n"))
 
 
@@ -683,10 +678,10 @@ def _download_file(url: str, output_filename: str, token: str, user_agent: str, 
         output_file.close()
 
         completion_message = "Completed downloading [{}]".format(output_filename)
-        q.put(termcolor.colored(completion_message, "white", "on_green"))
+        q.put(termcolor.colored(completion_message, "green"))
     except requests.exceptions.RequestException as ex:
         error_msg = "Problem downloading [{}] from [{}]: {}".format(output_filename, url, ex)
-        q.put(termcolor.colored(error_msg, 'white', 'on_red'))
+        q.put(termcolor.colored(error_msg, "red"))
 
 
 def download_interesting_files(token, scan_context: ScanningContext):
@@ -695,7 +690,7 @@ def download_interesting_files(token, scan_context: ScanningContext):
     """
 
     print(termcolor.colored("START: Attempting to locate and download interesting files (this may take some time)",
-                            "white", "on_blue"))
+                            "blue"))
     download_directory = scan_context.output_directory + '/downloads'
     pathlib.Path(download_directory).mkdir(parents=True, exist_ok=True)
 
@@ -739,24 +734,24 @@ def download_interesting_files(token, scan_context: ScanningContext):
 
         # Now actually start the requests
         if file_requests:
-            print(termcolor.colored("INFO: Retrieving {} files...".format(len(file_requests)), "white", "on_blue"))
+            print(termcolor.colored("INFO: Retrieving {} files...".format(len(file_requests)), "blue"))
             file_batches = (file_requests[i:i+DOWNLOAD_BATCH_SIZE]
                             for i in range(0, len(file_requests), DOWNLOAD_BATCH_SIZE))
             for batch in file_batches:
                 _retrieve_file_batch(batch, completed_file_names)
 
         while not completed_file_names.empty():  # Print out any final results
-            print(termcolor.colored(completed_file_names.get_nowait(), "white", "on_green"))
+            print(termcolor.colored(completed_file_names.get_nowait(), "green"))
 
     except requests.exceptions.RequestException as exception:
-        print(termcolor.colored(exception, "white", "on_red"))
+        print(termcolor.colored(exception, "red"))
 
     if file_requests:
         print(termcolor.colored(
             "END: Downloaded {} files to: ./{}/downloads".format(len(file_requests), scan_context.output_directory),
-            "white", "on_blue"))
+            "blue"))
     else:
-        print(termcolor.colored("END: No interesting files discovered.", "white", "on_blue"))
+        print(termcolor.colored("END: No interesting files discovered.", "blue"))
         print('\n')
 
 
@@ -842,10 +837,10 @@ if __name__ == '__main__':
     selected_agent = get_user_agent()
 
     if args.cookie is None and args.token is None:  # Must provide one or the other
-        print(termcolor.colored("No arguments passed. Run SlackPirate.py --help ", "white", "on_red"))
+        print(termcolor.colored("No arguments passed. Run SlackPirate.py --help ", "red"))
         exit()
     elif args.cookie and args.token:  # May not provide both
-        print(termcolor.colored("You cannot use both --cookie and --token flags at the same time", "white", "on_red"))
+        print(termcolor.colored("You cannot use both --cookie and --token flags at the same time", "red"))
         exit()
     elif args.cookie:  # Providing a cookie leads to a shorter execution path
         display_cookie_tokens(cookie=dict(d=args.cookie), user_agent=selected_agent)
@@ -855,10 +850,10 @@ if __name__ == '__main__':
     collected_scan_context = init_scanning_context(token=provided_token, user_agent=selected_agent)
     pathlib.Path(collected_scan_context.output_directory).mkdir(parents=True, exist_ok=True)
     print(termcolor.colored("INFO: Token looks valid! URL: " + collected_scan_context.slack_workspace
-                            + " User: " + collected_scan_context.username, "white", "on_blue"))
+                            + " User: " + collected_scan_context.username, "blue"))
     print(termcolor.colored("\n"))
     if check_if_admin_token(token=provided_token, scan_context=collected_scan_context):
-        print(termcolor.colored("BINGO: You seem to be in possession of an admin token!", "white", "on_magenta"))
+        print(termcolor.colored("BINGO: You seem to be in possession of an admin token!", "magenta"))
         print(termcolor.colored("\n"))
     print_interesting_information(scan_context=collected_scan_context)
 
@@ -893,7 +888,7 @@ if __name__ == '__main__':
         exit()
     elif any_true and any_false:  # There were both True and False arguments
         print(
-            termcolor.colored("You cannot use both enable flags and disable flags at the same time", "white", "on_red"))
+            termcolor.colored("You cannot use both enable flags and disable flags at the same time", "red"))
         exit()
     elif any_true:  # There were only enable flags specified
         for flag, scan in flags_and_scans:
