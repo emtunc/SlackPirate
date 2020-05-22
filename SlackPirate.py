@@ -76,8 +76,8 @@ LINKS_QUERIES = ["amazonaws",
                  "travis",
                  "trello"]
 # Regex constants with explanatory links
-# https://regex101.com/r/9GRaem/1
-ALREADY_SIGNED_IN_TEAM_REGEX = r"already_signed_in_team\" href=\"([a-zA-Z0-9:./-]+)"
+# https://regex101.com/r/9GRaem/2
+ALREADY_SIGNED_IN_TEAM_REGEX = r"(https://[a-zA-Z0-9\-]+\.slack\.com)"
 # https://regex101.com/r/2Hz8AX/2
 SLACK_API_TOKEN_REGEX = r"\"api_token\":\"(xox[a-zA-Z]-[a-zA-Z0-9-]+)\""
 # https://regex101.com/r/cSZW0G/1
@@ -170,7 +170,7 @@ def display_cookie_tokens(cookie, user_agent):
     try:
         cookie['d'] = urllib.parse.quote(urllib.parse.unquote(cookie['d']))
         r = requests.get("https://slackpirate-donotuse.slack.com", cookies=cookie)
-        already_signed_in_match = re.findall(ALREADY_SIGNED_IN_TEAM_REGEX, str(r.content))
+        already_signed_in_match = set(re.findall(ALREADY_SIGNED_IN_TEAM_REGEX, str(r.content)))
         if already_signed_in_match:
             print(termcolor.colored("This cookie has access to the following Workspaces: \n", "blue"))
             for workspace in already_signed_in_match:
