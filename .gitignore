@@ -2,3 +2,4 @@
 __pycache__
 SlackPirate_*/
 .DS_Store
+.venv

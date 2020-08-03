@@ -77,7 +77,7 @@ LINKS_QUERIES = ["amazonaws",
                  "trello"]
 # Regex constants with explanatory links
 # https://regex101.com/r/9GRaem/2
-ALREADY_SIGNED_IN_TEAM_REGEX = r"(https://[a-zA-Z0-9\-]+\.slack\.com)"
+ALREADY_SIGNED_IN_TEAM_REGEX = r"([a-zA-Z0-9\-]+\.slack\.com)"
 # https://regex101.com/r/2Hz8AX/2
 SLACK_API_TOKEN_REGEX = r"\"api_token\":\"(xox[a-zA-Z]-[a-zA-Z0-9-]+)\""
 # https://regex101.com/r/cSZW0G/1
@@ -174,7 +174,7 @@ def display_cookie_tokens(cookie, user_agent):
         if already_signed_in_match:
             print(termcolor.colored("This cookie has access to the following Workspaces: \n", "blue"))
             for workspace in already_signed_in_match:
-                r = requests.get(workspace + "/customize/emoji", cookies=cookie)
+                r = requests.get("https://" + workspace + "/customize/emoji", cookies=cookie)
                 regex_tokens = re.findall(SLACK_API_TOKEN_REGEX, str(r.content))
                 for slack_token in regex_tokens:
                     collected_scan_context = init_scanning_context(token=slack_token, user_agent=user_agent)
