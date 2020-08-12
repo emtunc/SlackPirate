@@ -128,6 +128,10 @@ This will do the following:
     
   * Verbose mode will output files in .CSV - will provide a lot more information such as channel names, usernames, perma-links and more.
 
+```python3 SlackPirate.py --interactive```
+
+  * Interactive mode instructs the tool to allow you to provide a token or cookie, and choose scans to run through a console UI rather than via command line arguments.
+
 ## Screenshots
 
 ![Alt text](screenshots/SlackPirate%20--cookie.png?raw=true "Using the --cookie flag")
