@@ -803,9 +803,9 @@ def _choose_tokens(cookie, user_agent):
         print(termcolor.colored("This cookie has access to the following workspaces:", "blue"))
         for i, (workspace, _, admin) in enumerate(tokens):
             if admin:
-                print(termcolor.colored(f"[{i}] {workspace} (admin!)", "magenta"))
+                print(termcolor.colored("[" + str(i) + "] " + workspace + " (admin!)", "magenta"))
             else:
-                print(termcolor.colored(f"[{i}] {workspace} (not admin)", "green"))
+                print(termcolor.colored("[" + str(i) + "] " + workspace + " (not admin)", "green"))
     else:
         print(termcolor.colored("No workspaces were found for this cookie", "red"))
         return None
@@ -821,7 +821,7 @@ def _choose_tokens(cookie, user_agent):
             if s in tokens:
                 selected_tokens.append(tokens[s][1])
             else:
-                print(termcolor.colored(f"Invalid workspace choice: '{s}'", "red"))
+                print(termcolor.colored("Invalid workspace choice: '" + s + "'", "red"))
                 return None
         print()
     else:
@@ -855,7 +855,7 @@ def _choose_scans():
     # Print options to terminal
     print(termcolor.colored("The following scanning options are available:", "blue"))
     for key, (name, _) in scan_options.items():
-        print(termcolor.colored(f"[{key}] {name}", "blue"))
+        print(termcolor.colored("[" + key + "] " + name, "blue"))
 
     # Select scanning options
     selection_list = input("Input ('A' or number(s) as comma separated list): ").strip()
@@ -876,7 +876,7 @@ def _choose_scans():
         if s in scan_options.keys():
             selected_scans.extend(scan_options[s][1])
         else:
-            print(termcolor.colored(f"Invalid scan option provided: '{s}'", "red"))
+            print(termcolor.colored("Invalid scan option provided: '" + s + "'", "red"))
             return None
 
     return selected_scans
@@ -929,7 +929,7 @@ def _interactive_command_line(args, user_agent):
     for provided_token in provided_tokens:
         collected_scan_context = init_scanning_context(token=provided_token, user_agent=selected_agent)
 
-        print(termcolor.colored(f"START: scanning {collected_scan_context.slack_workspace}..."))
+        print(termcolor.colored("START: scanning " + collected_scan_context.slack_workspace + "..."))
 
         pathlib.Path(collected_scan_context.output_directory).mkdir(parents=True, exist_ok=True)
         print_interesting_information(scan_context=collected_scan_context)
