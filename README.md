@@ -91,6 +91,10 @@ The script has been developed, tested and confirmed working on Python 3.5, 3.6 a
  ```python3 SlackPirate.py --help```
  
   * Display the help menu - this includes information about all scan modules you can explicitly select or ignore
+  
+  ```python3 SlackPirate.py --interactive```
+
+  * Interactive mode instructs the tool to allow you to provide a token or cookie, and choose scans to run through a console UI rather than via command line arguments.
 
  ```python3 SlackPirate.py --cookie <cookie>```
  
@@ -127,10 +131,6 @@ This will do the following:
 ```python3 SlackPirate.py --token <token> --verbose```
     
   * Verbose mode will output files in .CSV - will provide a lot more information such as channel names, usernames, perma-links and more.
-
-```python3 SlackPirate.py --interactive```
-
-  * Interactive mode instructs the tool to allow you to provide a token or cookie, and choose scans to run through a console UI rather than via command line arguments.
 
 ## Screenshots
 
