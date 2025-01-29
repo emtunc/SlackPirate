@@ -21,15 +21,15 @@ from constants import get_user_agent
 #############
 # Constants #
 #############
-POLL_TIMEOUT = 0.5  # Seconds to wait on a retrieval to finish
-DOWNLOAD_BATCH_SIZE = 25  # Pull up to this many files at once
+POLL_TIMEOUT = 0.5  # Seconds to wait on a retrieval to finish 
+DOWNLOAD_BATCH_SIZE = 25  # Pull up to this many files at once - anything but a very low number breaks WSL!
 CSV_HEADERS = ['timestamp', 'link', 'channel_id', 'channel_name', 'user_id', 'user_name', 'regex_results']
 # Query params
 MAX_RETRIEVAL_COUNT = 900
 # Output file names
 FILE_USER_LIST = "user-list.json"
 FILE_ACCESS_LOGS = "access-logs.json"
-FILE_S3 = "S3.txt"
+FILE_CLOUD = "CLOUD.txt"
 FILE_CREDENTIALS = "passwords.txt"
 FILE_AWS_KEYS = "aws-keys.txt"
 FILE_PINNED_MESSAGES = "pinned-messages.txt"
@@ -37,8 +37,8 @@ FILE_PRIVATE_KEYS = "private-keys.txt"
 FILE_LINKS = "URLs.txt"
 
 # Query pieces
-S3_QUERIES = ["s3.amazonaws.com", "s3://", "https://s3", "http://s3"]
-CREDENTIALS_QUERIES = ["password:", "password is", "pwd", "passwd"]
+CLOUD_QUERIES = ["s3.amazonaws.com", "s3://", "https://s3", "http://s3", "core.windows.net"]
+CREDENTIALS_QUERIES = ["password:", "password is", "pwd", "passwd", "password", "pass"]
 AWS_KEYS_QUERIES = ["ASIA*", "AKIA*"]
 PRIVATE_KEYS_QUERIES = ["BEGIN DSA PRIVATE",
                         "BEGIN EC PRIVATE",
@@ -46,8 +46,6 @@ PRIVATE_KEYS_QUERIES = ["BEGIN DSA PRIVATE",
                         "BEGIN PGP PRIVATE",
                         "BEGIN RSA PRIVATE"]
 INTERESTING_FILE_QUERIES = [".config",
-                            ".doc",
-                            ".docx",
                             ".key",
                             ".p12",
                             ".pem",
@@ -55,10 +53,43 @@ INTERESTING_FILE_QUERIES = [".config",
                             ".pkcs12",
                             ".ppk",
                             ".sh",
+                            ".zsh",
+                            ".py",
+                            ".js",
+                            ".json",
+                            ".jsp",
+                            ".md",
+                            ".pl",
+                            ".rb",
                             ".sql",
+                            ".tar",
+                            ".tar.gz",
+                            ".tgz",
+                            ".zip",
+                            "dockerfile",
+                            ".sql",
+                            ".txt",
+                            ".log",
+                            ".xml",
+                            ".yaml",
+                            ".yml",
+                            ".toml",
+                            "id_rsa",
+                            "id_ed",
+                            "backup",
+                            "config",
+                            "credentials",
+                            "db",
+                            "database",
+                            "dump",
+                            "env",
+                            "git-crypt",
+                            "gitignore",
+                            "gpg",
+                            "keychain",
+                            "kdbx",
                             "backup",
                             "password",
-                            "pasted image",
                             "secret"]
 LINKS_QUERIES = ["amazonaws",
                  "atlassian",
@@ -85,12 +116,18 @@ WORKSPACE_VALID_EMAILS_REGEX = r"email-domains-formatted=\"(@.+?)[\"]"
 # https://regex101.com/r/jWrF8F/2
 PRIVATE_KEYS_REGEX = r"([-]+BEGIN [^\s]+ PRIVATE KEY[-]+[\s]*[^-]*[-]+END [^\s]+ PRIVATE KEY[-]+)"
 # https://regex101.com/r/6bLaKj/8
-S3_REGEX = r"(" \
-           r"[a-zA-Z0-9-\.\_]+\.s3\.amazonaws\.com" \
-           r"|s3://[a-zA-Z0-9-\.\_]+" \
-           r"|s3-[a-zA-Z0-9-\.\_\/]+" \
-           r"|s3.amazonaws.com/[a-zA-Z0-9-\.\_]+" \
-           r"|s3.console.aws.amazon.com/s3/buckets/[a-zA-Z0-9-\.\_]+)"
+CLOUD_REGEX = r"(" \
+                r"[a-zA-Z0-9-\.\_]+\.s3\.amazonaws\.com" \
+                r"|s3://[a-zA-Z0-9-\.\_]+" \
+                r"|s3-[a-zA-Z0-9-\.\_\/]+" \
+                r"|s3.amazonaws.com/[a-zA-Z0-9-\.\_]+" \
+                r"|s3.console.aws.amazon.com/s3/buckets/[a-zA-Z0-9-\.\_]+" \
+                r"|[a-zA-Z0-9-\.\_]+\.blob\.core\.windows\.net" \
+                r"|[a-zA-Z0-9-\.\_]+\.file\.core\.windows\.net" \
+                r"|[a-zA-Z0-9-\.\_]+\.dfs\.core\.windows\.net" \
+                r"|[a-zA-Z0-9-\.\_]+\.queue\.core\.windows\.net" \
+                r"|[a-zA-Z0-9-\.\_]+\.table\.core\.windows\.net" \
+              r")"
 # https://regex101.com/r/DoPV1M/3
 CREDENTIALS_REGEX = r"(?i)(" \
                     r"password\s*[`=:\"]+\s*[^\s]+|" \
@@ -144,14 +181,14 @@ class ScanningContext:
 def sleep_if_rate_limited(slack_api_json_response):
     """
     All this function does is check if the response tells us we're being rate-limited. If it is, sleep for
-    60 seconds then continue. Previously I was proactively sleeping for 60 seconds before the documented rate-limit
+    10 seconds then continue. Previously I was proactively sleeping for 10 seconds before the documented rate-limit
     kicked in but then learned not to trust the docs as they weren't trustworthy (the actual rate-limit is
     more lenient then what they have documented which is a good thing for us but meant that a proactive rate-limit
     would sleep prematurely)
     """
 
     if slack_api_json_response['ok'] is False and slack_api_json_response['error'] == 'ratelimited':
-        print(termcolor.colored("[Rate-limit]: Slack API rate limit hit - sleeping for 60 seconds", "yellow"))
+        print(termcolor.colored("[Rate-limit]: Slack API rate limit hit - sleeping for 10 seconds", "yellow"))
         time.sleep(10)
         return True
     else:
@@ -274,7 +311,7 @@ def dump_team_access_logs(token, cookie, scan_context: ScanningContext):
         else:
             print(termcolor.colored(
                 "[Access Logs]: Unable to dump access logs (this is normal if you don't have a privileged token on a non-free "
-                "Workspace). Slack error: " + str(r['error']), "blue"))
+                "Workspace). Slack error: " + str(r['error']), "red"))
             print(termcolor.colored("\n"))
             return
     except requests.exceptions.RequestException as exception:
@@ -327,13 +364,13 @@ def dump_user_list(token, cookie, scan_context: ScanningContext):
     print(termcolor.colored("\n"))
 
 
-def find_s3(token, cookie, scan_context: ScanningContext):
-    print(termcolor.colored("[S3]: Attempting to find references to S3 buckets", "blue"))
+def find_cloud(token, cookie, scan_context: ScanningContext):
+    print(termcolor.colored("[CLOUD]: Attempting to find references to S3/Azure buckets", "blue"))
     page_count_by_query = dict()
 
     try:
         r = None
-        for query in S3_QUERIES:
+        for query in CLOUD_QUERIES:
             while True:
                 r = requests.get("https://slack.com/api/search.messages",
                                  params=dict(token=token, query="\"{}\"".format(query), pretty=1, count=100),
@@ -343,7 +380,7 @@ def find_s3(token, cookie, scan_context: ScanningContext):
             page_count_by_query[query] = (r['messages']['pagination']['page_count'])
 
         if verbose:
-            with open(scan_context.output_directory + '/' + FILE_S3.replace('txt','csv'), mode='a') as log_output:
+            with open(scan_context.output_directory + '/' + FILE_CLOUD.replace('txt','csv'), mode='a') as log_output:
                 writer = csv.writer(log_output, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
                 writer.writerow(CSV_HEADERS)
 
@@ -355,21 +392,21 @@ def find_s3(token, cookie, scan_context: ScanningContext):
                 r = requests.get("https://slack.com/api/search.messages",
                                  params=params,
                                  headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
-                regex_results = re.findall(S3_REGEX, str(r))
+                regex_results = re.findall(CLOUD_REGEX, str(r))
                 if verbose:
-                    write_to_csv(r, S3_REGEX, FILE_S3, scan_context)
+                    write_to_csv(r, CLOUD_REGEX, FILE_CLOUD, scan_context)
                 else:
-                    with open(scan_context.output_directory + '/' + FILE_S3, 'a', encoding="utf-8") as log_output:
+                    with open(scan_context.output_directory + '/' + FILE_CLOUD, 'a', encoding="utf-8") as log_output:
                         for item in set(regex_results):
                             log_output.write(item + "\n")
                 page += 1
     except requests.exceptions.RequestException as exception:
         print(termcolor.colored(exception, "red"))
         print(termcolor.colored("\n"))
-    file_cleanup(input_file=FILE_S3, scan_context=scan_context)
+    file_cleanup(input_file=FILE_CLOUD, scan_context=scan_context)
     print(
-        termcolor.colored("[S3]: If any S3 buckets were found, they will be here: ./" + scan_context.output_directory +
-                          "/" + FILE_S3, "green"))
+        termcolor.colored("[CLOUD]: If any S3/Azure buckets were found, they will be here: ./" + scan_context.output_directory +
+                          "/" + FILE_CLOUD, "green"))
     print(termcolor.colored("\n"))
 
 
@@ -529,6 +566,10 @@ def find_all_channels(token, cookie, scan_context: ScanningContext):
                                          pretty=1, limit=1, cursor=pagination_cursor,
                                          types='public_channel,private_channel'),
                              headers={'Cookie': f'd={cookie}', 'User-Agent': scan_context.user_agent}).json()
+            if not r['ok']: #This will be restricted on enterprise workspaces
+                print(termcolor.colored("[Channel List]: Unable to get the channel list. (this is normal if you don't have a " "privileged token on a non-free Workspace). Slack error: " + str(r['error']), "red"))
+                print(termcolor.colored("\n"))
+                return channel_list
             if not sleep_if_rate_limited(r):
                 pagination_cursor = r['response_metadata']['next_cursor']
                 break
@@ -687,12 +728,13 @@ def _download_file(url: str, output_filename: str, token: str, cookie: str, user
         headers = {'Authorization': 'Bearer ' + token, 'Cookie': f'd={cookie}', 'User-Agent': user_agent}
         response = requests.get(url, headers=headers)
 
-        output_file = open("{}/{}".format(download_directory, output_filename), 'wb')
-        output_file.write(response.content)
-        output_file.close()
+        # Use a with statement to open and write to the output file
+        with open("{}/{}".format(download_directory, output_filename), 'wb') as output_file:
+            output_file.write(response.content)
 
         completion_message = "[Interesting Files] Successfully downloaded {}".format(output_filename)
         q.put(termcolor.colored(completion_message, "green"))
+
     except requests.exceptions.RequestException as ex:
         error_msg = "Problem downloading [{}] from [{}]: {}".format(output_filename, url, ex)
         q.put(termcolor.colored(error_msg, "red"))
@@ -811,10 +853,10 @@ if __name__ == '__main__':
                         help='enable retrieval of user list')
     parser.add_argument('--no-user-list', dest='user_list', action='store_false',
                         help='disable retrieval of user list')
-    parser.add_argument('--s3-scan', dest='s3_scan', action='store_true',
-                        help='enable searching for s3 references in messages')
-    parser.add_argument('--no-s3-scan', dest='s3_scan', action='store_false',
-                        help='disable searching for s3 references in messages')
+    parser.add_argument('--cloud-scan', dest='cloud_scan', action='store_true',
+                        help='enable searching for cloud storage references in messages')
+    parser.add_argument('--no-cloud-scan', dest='cloud_scan', action='store_false',
+                        help='disable searching for cloud storage references in messages')
     parser.add_argument('--pinned-message-scan', dest='pinned_message_scan', action='store_true',
                         help='enable searching of pinned messages across all channels')
     parser.add_argument('--no-pinned-message-scan', dest='pinned_message_scan', action='store_false',
@@ -846,7 +888,7 @@ if __name__ == '__main__':
     Even with "argument_default=None" in the constructor, all flags were False, so we explicitly set every flag to None
     This is necessary, because we want to differentiate between "all False" and "any False"
     """
-    parser.set_defaults(team_access_logs=None, user_list=None, s3_scan=None, credential_scan=None, aws_key_scan=None,
+    parser.set_defaults(team_access_logs=None, user_list=None, cloud_scan=None, credential_scan=None, aws_key_scan=None,
                         private_key_scan=None, link_scan=None, file_download=None, pinned_message_scan=None)
     args = parser.parse_args()
 
@@ -876,7 +918,7 @@ if __name__ == '__main__':
     flags_and_scans = [
         ('team_access_logs', dump_team_access_logs),
         ('user_list', dump_user_list),
-        ('s3_scan', find_s3),
+        ('cloud_scan', find_cloud),
         ('credential_scan', find_credentials),
         ('aws_key_scan', find_aws_keys),
         ('private_key_scan', find_private_keys),
