@@ -38,18 +38,12 @@ The Slack web application uses a number of cookies - the one of special interest
 
 The Slack API token is a per-workspace token. One token cannot (as far as I know) access other workspaces in the same way the `d` cookie above allows access to all Workspaces.
 
-For the tool to search for and extract information, you will need to provide it an API token. There are two straight forward ways of doing this:
+For the tool to search for and extract information, you will need to provide it an API token in addition to a Slack Cookie. This token is included within the form data of requests sent to the Slack API from the client. So to use SlackPirate, you will need to provide the following information:
 
   * Provide the tool a `d` cookie by using the `--cookie` flag. The tool will output the associated Workspaces and tokens
-  * Provide the tool with a token directly by using the `--token` flag. You can find this by viewing the source of the Workspace URL and doing a search for `XOX`
+  * Provide the tool with a token using the `--token` flag. You can find this by either using devtools or some other form of network monitoring, or by scraping the process memory of Slack for it. It starts with `xoxc-`
 
-The token will look something like this:
-
-`
-api_token: "xoxs-x-x-x-x"
-`
-
-Make a copy of that and pass that in to the script using the `--token` flag.
+Make sure to pass in both a token and a cookie - you need both to be able to authenticate
 
 ## Building
 
