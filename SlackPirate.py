@@ -38,7 +38,7 @@ FILE_LINKS = "URLs.txt"
 
 # Query pieces
 CLOUD_QUERIES = ["s3.amazonaws.com", "s3://", "https://s3", "http://s3", "core.windows.net"]
-CREDENTIALS_QUERIES = ["password:", "password is", "pwd", "passwd", "password", "pass"]
+CREDENTIALS_QUERIES = ["password:", "password is", "passwd", "password", "pass:", "pass is", "pwd:", "pwd is"]
 AWS_KEYS_QUERIES = ["ASIA*", "AKIA*"]
 PRIVATE_KEYS_QUERIES = ["BEGIN DSA PRIVATE",
                         "BEGIN EC PRIVATE",
